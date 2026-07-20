@@ -1,0 +1,15 @@
+@'
+# EDA backups & autosave
+*.bak
+*-bak/
+*.dbk
+*.autosave
+allegro.jrl
+*.log
+signal.dat
+sch.dbg
+netlist/
+# OS
+Thumbs.db
+.DS_Store
+'@ | Out-File -FilePath .gitignore -Encoding utf8
