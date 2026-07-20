@@ -1,5 +1,6 @@
-@'
 # TLVR Helix
+
+TLVR Helix is a single-slice core-rail regulator scoped to the power-delivery requirements of a Tomahawk-6-class 3nm switch ASIC. A full deployment current-shares 1 slice; this board proves out one.
 
 A multiphase Trans-Inductor Voltage Regulator (TLVR) for high-current, high-di/dt core rails (AI accelerator / CPU-class loads). Training/portfolio design — built to production-grade rigor.
 
