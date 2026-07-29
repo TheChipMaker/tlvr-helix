@@ -8,7 +8,7 @@ builds, and proves out one slice.
 A multiphase Trans-Inductor Voltage Regulator (TLVR) for high-current, high-di/dt core rails (AI accelerator / CPU-class loads). Training/portfolio design — built to production-grade rigor.
 
 **Status:** Early design — specification phase
-**Author:** Ahmad Nabil (TheChipMaker / VccLabs)
+**Author:** Ahmad Nabil (TheChipMaker / Nurvia Tech)
 
 ---
 
