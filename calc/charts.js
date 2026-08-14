@@ -118,7 +118,7 @@
 
     /* limit line — red, because past it the design fails */
     if (spec.limit && isFinite(spec.limit.value) &&
-        spec.limit.value >= xe[0] && spec.limit.value <= xe[1]) {
+      spec.limit.value >= xe[0] && spec.limit.value <= xe[1]) {
       svg.appendChild(el("line", {
         x1: X(spec.limit.value), y1: M.t,
         x2: X(spec.limit.value), y2: M.t + ph, class: "limit"
@@ -146,7 +146,7 @@
       for (var j = 0; j < s.values.length; j++) {
         if (!isFinite(s.values[j])) continue;
         d += (d ? "L" : "M") + X(spec.x.values[j]).toFixed(1) + " " +
-             Y(s.values[j]).toFixed(1) + " ";
+          Y(s.values[j]).toFixed(1) + " ";
       }
       svg.appendChild(el("path", {
         d: d, class: "series" + (s.dash ? " dashed" : "")
@@ -190,7 +190,7 @@
       var i = document.createElement("span");
       i.className = "lg" + (s.dash ? " dash" : "");
       i.textContent = s.label + " (" + s.unit + ", " +
-                      (s.axis === "right" ? "right" : "left") + ")";
+        (s.axis === "right" ? "right" : "left") + ")";
       d.appendChild(i);
     });
     return d;
@@ -212,16 +212,74 @@
      Terms absent from this registry simply get no chart — the detail panel
      shows the extended text and formula only. Never a placeholder.
      =========================================================================== */
+  /* All three loop-resistance terms sum into the same path, so they share one
+       chart plotted against total loop resistance. [IFX Eq. 57, TI Eq. 26] */
+  function loopResistanceChart(note) {
+    return {
+      note: note,
+      build: function (p) {
+        var D = EQ.dutyCycle(p.vin, p.vout);
+        var iLc = EQ.iLcRipple({
+          k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+          Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+        });
+        var iRms = EQ.iRmsLc(iLc);
+        var Rtot = p.rLc + p.N * p.rSec + p.rRoute;
+        var hi = Math.max(Rtot * 2.5, 6e-3);
+
+        var a = sweep(0.2e-3, hi, 80, function (R) { return (p.Lc / R) * 1e6; });
+        var b = sweep(0.2e-3, hi, 80, function (R) {
+          return iRms * iRms * R + p.pCore;
+        });
+        return {
+          x: {
+            label: "Total loop resistance (m\u2126)", unit: "m\u2126",
+            values: a.xs.map(function (v) { return v * 1e3; })
+          },
+          series: [
+            { label: "Loop decay time", unit: "\u00B5s", values: a.ys, axis: "left" },
+            { label: "Loop power loss", unit: "W", values: b.ys, axis: "right", dash: true }
+          ],
+          marker: { value: Rtot * 1e3, label: "current total" },
+          leftLabel: "tau_Lc (\u00B5s)", rightLabel: "P_Lc (W)"
+        };
+      }
+    };
+  }
+
   var CHARTS = {
-vin: {
+
+    rlc: loopResistanceChart(
+      "Lower resistance means lower loss but a longer decay time, so the two " +
+      "curves oppose each other. Infineon warns that this decay is normally " +
+      "far too slow to prevent overshoot on its own, and specifically advises " +
+      "against non-linear control on load release: if the controller releases " +
+      "tri-state before the loop current has decayed, excursions can compound " +
+      "and destroy the power stage."),
+
+    rsec: loopResistanceChart(
+      "This term enters multiplied by phase count, since all N secondaries are " +
+      "in series in the loop, so it usually dominates the total plotted here. " +
+      "The primary winding is a different path and a different rule: it carries " +
+      "the DC load current and Renesas puts it under 0.2 milliohm."),
+
+    rroute: loopResistanceChart(
+      "Routing is usually the easiest of the three terms to change. Infineon " +
+      "recommends keeping the loop on the top layer with no vias and closing it " +
+      "through second-layer ground, treating the whole loop as a noisy net " +
+      "comparable to a switching node."),
+
+    vin: {
       note: "Loop ripple and the peak L_C voltage both rise with V_IN, but not " +
-            "smoothly: raising V_IN lowers the duty cycle, which shifts how many " +
-            "phases overlap and produces the steps you see. The right axis is the " +
-            "worst-case stress on the compensating inductor and its routing.",
+        "smoothly: raising V_IN lowers the duty cycle, which shifts how many " +
+        "phases overlap and produces the steps you see. The right axis is the " +
+        "worst-case stress on the compensating inductor and its routing.",
       build: function (p) {
         var a = sweep(4.25, 16, 90, function (v) {
-          return EQ.iLcRipple({ k: p.k, N: p.N, D: EQ.dutyCycle(v, p.vout),
-                                vin: v, vout: p.vout, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          return EQ.iLcRipple({
+            k: p.k, N: p.N, D: EQ.dutyCycle(v, p.vout),
+            vin: v, vout: p.vout, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+          });
         });
         var b = sweep(4.25, 16, 90, function (v) {
           return EQ.vLcMax({ nOn: p.nOn, vin: v, N: p.N, vout: p.vout });
@@ -240,20 +298,24 @@ vin: {
 
     vout: {
       note: "The cusps are real, not artefacts. Wherever N x D reaches a whole " +
-            "number the phases overlap perfectly and the loop ripple falls to " +
-            "zero. Your rail sits between cusps, so it does not benefit from that " +
-            "cancellation, and V_OUT is fixed by the load in any case. Read this " +
-            "as diagnosis rather than as something to tune.",
+        "number the phases overlap perfectly and the loop ripple falls to " +
+        "zero. Your rail sits between cusps, so it does not benefit from that " +
+        "cancellation, and V_OUT is fixed by the load in any case. Read this " +
+        "as diagnosis rather than as something to tune.",
       build: function (p) {
         var hi = Math.max(p.vout * 4, p.vin * 0.4);
         var a = sweep(0.2, hi, 160, function (v) {
-          return EQ.iLcRipple({ k: p.k, N: p.N, D: EQ.dutyCycle(p.vin, v),
-                                vin: p.vin, vout: v, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          return EQ.iLcRipple({
+            k: p.k, N: p.N, D: EQ.dutyCycle(p.vin, v),
+            vin: p.vin, vout: v, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+          });
         });
         var b = sweep(0.2, hi, 160, function (v) {
           var D = EQ.dutyCycle(p.vin, v);
-          var iLc = EQ.iLcRipple({ k: p.k, N: p.N, D: D, vin: p.vin, vout: v,
-                                   Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          var iLc = EQ.iLcRipple({
+            k: p.k, N: p.N, D: D, vin: p.vin, vout: v,
+            Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+          });
           var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
           return EQ.iOutRipple({ k: p.k, N: p.N, D: D, fsw: p.fsw, iLc: iLc, iMag: iMag });
         });
@@ -271,16 +333,18 @@ vin: {
 
     nph: {
       note: "The slew advantage on the right axis climbs steadily with phase " +
-            "count, which is the case for going wide. The ripple on the left is " +
-            "cusped, because phase count and duty cycle interact through N x D. " +
-            "TI reserves this topology for designs above six phases, marked in " +
-            "red, since the un-cancelled loop contribution grows as N falls.",
+        "count, which is the case for going wide. The ripple on the left is " +
+        "cusped, because phase count and duty cycle interact through N x D. " +
+        "TI reserves this topology for designs above six phases, marked in " +
+        "red, since the un-cancelled loop contribution grows as N falls.",
       build: function (p) {
         var xs = [], rip = [], gain = [], n, D, iLc, iMag;
         for (n = 2; n <= 16; n++) {
           D = EQ.dutyCycle(p.vin, p.vout);
-          iLc = EQ.iLcRipple({ k: p.k, N: n, D: D, vin: p.vin, vout: p.vout,
-                               Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          iLc = EQ.iLcRipple({
+            k: p.k, N: n, D: D, vin: p.vin, vout: p.vout,
+            Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+          });
           iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
           xs.push(n);
           rip.push(EQ.iOutRipple({ k: p.k, N: n, D: D, fsw: p.fsw, iLc: iLc, iMag: iMag }));
@@ -301,15 +365,17 @@ vin: {
 
     itdc: {
       note: "Ripple is independent of load, so these lines are straight and the " +
-            "gap between DC and peak stays constant. The red line is the device " +
-            "absolute maximum average current times phase count, not a usable " +
-            "continuous rating. Real headroom comes from the datasheet thermal " +
-            "derating curve at your ambient and airflow.",
+        "gap between DC and peak stays constant. The red line is the device " +
+        "absolute maximum average current times phase count, not a usable " +
+        "continuous rating. Real headroom comes from the datasheet thermal " +
+        "derating curve at your ambient and airflow.",
       build: function (p) {
         var hi = Math.max(p.iTdc * 2, p.N * 90 * 1.15);
         var D = EQ.dutyCycle(p.vin, p.vout);
-        var iLc = EQ.iLcRipple({ k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
-                                 Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+        var iLc = EQ.iLcRipple({
+          k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+          Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+        });
         var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
         var iPh = EQ.iPhaseRipple(iMag, p.k, iLc);
 
@@ -337,15 +403,17 @@ vin: {
 
     k: {
       note: "Tighter coupling lowers the effective loop inductance L_CT, which " +
-            "speeds the transient response but raises loop ripple. Coupling is " +
-            "therefore not simply better when tighter, it slides the same " +
-            "trade-off that L_C does. Results are sensitive across this range, so " +
-            "take k from the transformer datasheet or measure it.",
+        "speeds the transient response but raises loop ripple. Coupling is " +
+        "therefore not simply better when tighter, it slides the same " +
+        "trade-off that L_C does. Results are sensitive across this range, so " +
+        "take k from the transformer datasheet or measure it.",
       build: function (p) {
         var D = EQ.dutyCycle(p.vin, p.vout);
         var a = sweep(0.85, 0.999, 90, function (kk) {
-          return EQ.iLcRipple({ k: kk, N: p.N, D: D, vin: p.vin, vout: p.vout,
-                                Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          return EQ.iLcRipple({
+            k: kk, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
+          });
         });
         var b = sweep(0.85, 0.999, 90, function (kk) {
           return EQ.lct({ k: kk, N: p.N, Lm: p.Lm, Lc: p.Lc }) * 1e9;
@@ -361,34 +429,81 @@ vin: {
         };
       }
     },
+
+    lm: {
+      note: "Phase ripple falls as L_M rises, which is the buck-converter part " +
+        "of the picture. The right axis shows the opposing effect specific " +
+        "to TLVR: leakage scales with L_M, so a larger magnetizing " +
+        "inductance also raises the effective loop inductance L_CT and " +
+        "slows the loop. Choose L_M for steady-state ripple first, then " +
+        "solve for L_C.",
+      build: function (p) {
+        var lo = 40e-9, hi = Math.max(p.Lm * 3, 400e-9);
+        var D = EQ.dutyCycle(p.vin, p.vout);
+        var a = sweep(lo, hi, 80, function (Lm) {
+          var iMag = EQ.iMagRipple({ vin: p.vin, Lm: Lm, fsw: p.fsw, D: D });
+          var iLc = EQ.iLcRipple({
+            k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            Lc: p.Lc, Lm: Lm, fsw: p.fsw
+          });
+          return EQ.iPhaseRipple(iMag, p.k, iLc);
+        });
+        var b = sweep(lo, hi, 80, function (Lm) {
+          return EQ.lct({ k: p.k, N: p.N, Lm: Lm, Lc: p.Lc }) * 1e9;
+        });
+        return {
+          x: {
+            label: "Magnetizing inductance L_M (nH)", unit: "nH",
+            values: a.xs.map(function (v) { return v * 1e9; })
+          },
+          series: [
+            { label: "Total phase ripple", unit: "A", values: a.ys, axis: "left" },
+            { label: "Effective loop L_CT", unit: "nH", values: b.ys, axis: "right", dash: true }
+          ],
+          marker: { value: p.Lm * 1e9, label: "chosen" },
+          leftLabel: "Ripple (A)", rightLabel: "L_CT (nH)"
+        };
+      }
+    },
+
     lc: {
       note: "Both curves move against each other, which is the whole L_C " +
-            "trade-off. Lower L_C ramps current faster and cuts the " +
-            "capacitance you need, but drives loop ripple and RMS loss up. " +
-            "The red line is the ceiling from the slew requirement — any " +
-            "L_C to the right of it cannot track the load step at all.",
+        "trade-off. Lower L_C ramps current faster and cuts the " +
+        "capacitance you need, but drives loop ripple and RMS loss up. " +
+        "The red line is the ceiling from the slew requirement — any " +
+        "L_C to the right of it cannot track the load step at all.",
       build: function (p) {
         var lo = 40e-9, hi = Math.max(p.Lc * 3, 400e-9);
         var D = EQ.dutyCycle(p.vin, p.vout);
         var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
 
         var a = sweep(lo, hi, 80, function (Lc) {
-          return EQ.iLcRipple({ k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
-                                Lc: Lc, Lm: p.Lm, fsw: p.fsw });
+          return EQ.iLcRipple({
+            k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            Lc: Lc, Lm: p.Lm, fsw: p.fsw
+          });
         });
         var b = sweep(lo, hi, 80, function (Lc) {
-          var s = EQ.slopeUpTlvr({ nOn: p.nOn, N: p.N, vin: p.vin,
-                                   vout: p.vout, Lm: p.Lm, Lc: Lc });
-          return EQ.coutRequired({ iStep: p.iStep, slope: s,
-                                   dVac: p.dVac, rLL: p.rLL }) * 1e6;
+          var s = EQ.slopeUpTlvr({
+            nOn: p.nOn, N: p.N, vin: p.vin,
+            vout: p.vout, Lm: p.Lm, Lc: Lc
+          });
+          return EQ.coutRequired({
+            iStep: p.iStep, slope: s,
+            dVac: p.dVac, rLL: p.rLL
+          }) * 1e6;
         });
-        var lcMax = EQ.lcMaxFromSlew({ k: p.k, N: p.N, iStep: p.iStep,
-                                       tStep: p.tStep, dRamp: p.dRamp,
-                                       vin: p.vin, vout: p.vout, Lm: p.Lm });
+        var lcMax = EQ.lcMaxFromSlew({
+          k: p.k, N: p.N, iStep: p.iStep,
+          tStep: p.tStep, dRamp: p.dRamp,
+          vin: p.vin, vout: p.vout, Lm: p.Lm
+        });
 
         return {
-          x: { label: "Compensating inductance L_C (nH)", unit: "nH",
-               values: a.xs.map(function (v) { return v * 1e9; }) },
+          x: {
+            label: "Compensating inductance L_C (nH)", unit: "nH",
+            values: a.xs.map(function (v) { return v * 1e9; })
+          },
           series: [
             { label: "L_C ripple", unit: "A", values: a.ys, axis: "left" },
             { label: "C_OUT needed", unit: "\u00B5F", values: b.ys, axis: "right", dash: true }
@@ -404,18 +519,20 @@ vin: {
 
     fsw: {
       note: "Raising the switching frequency shrinks every ripple term, which " +
-            "is why it looks like a free win on this plot. It is not: the " +
-            "compensating inductor is excited at N x f_SW, shown on the right " +
-            "axis, and ferrite core loss climbs steeply with frequency. Read " +
-            "this chart alongside your L_C vendor's core-loss curve at that " +
-            "right-hand value, not on its own.",
+        "is why it looks like a free win on this plot. It is not: the " +
+        "compensating inductor is excited at N x f_SW, shown on the right " +
+        "axis, and ferrite core loss climbs steeply with frequency. Read " +
+        "this chart alongside your L_C vendor's core-loss curve at that " +
+        "right-hand value, not on its own.",
       build: function (p) {
         var lo = 200e3, hi = 1600e3;
         var D = EQ.dutyCycle(p.vin, p.vout);
 
         var a = sweep(lo, hi, 80, function (f) {
-          return EQ.iLcRipple({ k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
-                                Lc: p.Lc, Lm: p.Lm, fsw: f });
+          return EQ.iLcRipple({
+            k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            Lc: p.Lc, Lm: p.Lm, fsw: f
+          });
         });
         var b = sweep(lo, hi, 80, function (f) {
           return EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: f, D: D });
@@ -423,8 +540,10 @@ vin: {
         var c = sweep(lo, hi, 80, function (f) { return (p.N * f) / 1e6; });
 
         return {
-          x: { label: "Switching frequency per phase (kHz)", unit: "kHz",
-               values: a.xs.map(function (v) { return v / 1e3; }) },
+          x: {
+            label: "Switching frequency per phase (kHz)", unit: "kHz",
+            values: a.xs.map(function (v) { return v / 1e3; })
+          },
           series: [
             { label: "L_C ripple", unit: "A", values: a.ys, axis: "left" },
             { label: "Magnetizing ripple", unit: "A", values: b.ys, axis: "left", dash: true },
@@ -449,9 +568,9 @@ vin: {
     overlay.hidden = true;
     overlay.innerHTML =
       '<div class="panel" role="dialog" aria-modal="true" aria-labelledby="pnl-h">' +
-        '<header><h3 id="pnl-h"></h3>' +
-        '<button class="close" type="button" aria-label="Close">\u00D7</button></header>' +
-        '<div class="panel-body"></div>' +
+      '<header><h3 id="pnl-h"></h3>' +
+      '<button class="close" type="button" aria-label="Close">\u00D7</button></header>' +
+      '<div class="panel-body"></div>' +
       "</div>";
     document.body.appendChild(overlay);
     panel = overlay.querySelector(".panel");

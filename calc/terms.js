@@ -76,33 +76,70 @@ vin: {
   /* --- magnetics --- */
   lm: {
     t: "Magnetizing inductance (L_M)",
-    d: "The primary-side inductance of each trans-inductor, equivalent to the filter inductor of a plain multiphase buck. Sets the steady-state phase ripple exactly as in a buck converter.",
-    src: "TI Eq. 8"
+    d: "The primary-side inductance of each trans-inductor. Sets steady-state phase ripple exactly as a buck filter inductor does.",
+    long: [
+      "In steady state L_M behaves exactly like the filter inductor of an ordinary multiphase buck. The magnetizing ripple is V_IN x (1 - D) x D / (L_M x f_SW), with no dependence on L_C or coupling. A common target is 30 to 40 percent of the per-phase DC current.",
+      "In a plain buck the inductance is the single lever for transient response, and TI notes it cannot be made small without penalty: lower inductance means higher current ripple, higher output voltage ripple, and higher RMS current in every phase, which costs efficiency. The value is therefore always a compromise.",
+      "TLVR breaks that compromise. During a transient the effective inductance becomes L_M x L_C / (k squared x N squared x L_M + N x L_C), which is far lower than L_M itself. That lets you choose L_M for steady-state ripple and efficiency, and use L_C to buy the transient response separately.",
+      "L_M still bounds L_C, though. Infineon's expression for the largest permissible L_C contains a term N / L_M, and if that term alone already exceeds the required slew rate, no value of L_C can meet the target. Infineon's stated order of work is to pick L_M for overshoot and saturation first, then solve for L_C.",
+      "Note that raising L_M lowers phase ripple but raises the effective loop inductance L_CT, because leakage scales with L_M. The two effects pull in opposite directions on the loop, which the chart shows."
+    ],
+    src: "IFX Eq. 4, 29, 30, 31; TI Converter Transient Response and Eq. 8"
   },
   lc: {
     t: "Compensating inductor (L_C)",
-    d: "The inductor closing the series secondary loop. This is the component that makes a TLVR a TLVR. Smaller L_C means a faster current slew during transients but larger steady-state ripple and higher RMS loss. Start at L_C = L_M; 0.8x to 1.5x L_M is the usual discrete range.",
-    src: "TI, LC Inductor Selection"
+    d: "The inductor closing the series secondary loop. This is the component that makes a TLVR a TLVR.",
+    long: [
+      "L_C sets how much of the transient benefit you get. Smaller values ramp current faster and cut the output capacitance you need, at the cost of higher steady-state loop ripple, higher RMS loss, and greater stress on the part.",
+      "TI recommends starting at L_C equal to L_M as a balanced trade-off, with 0.8 to 1.5 times L_M common in discrete designs. Lower values are more typical of highly integrated designs such as power modules.",
+      "At steady state L_C carries no DC current at all, only AC ripple, so its RMS current is set entirely by that ripple. Because it is excited at N x f_SW, TI advises low core-loss materials such as ferrite, and notes that soft-saturating cores may further improve transient response.",
+      "Saturation is the critical failure mode, and Infineon is blunt about the consequence: if L_C saturates the steep current ramp is translated into every phase, driving the TLVR transformers into saturation as well. The controller then loses control and the power stage sees what is effectively a short, which can destroy it. L_C must never be allowed to saturate.",
+      "For scale, two real parts from the Renesas material: a hard-saturating ferrite at 150 nH with 52 A saturation and 0.17 milliohm DCR in a 6.5 by 6.5 by 10 mm body, and a soft-saturating moulded part at 100 nH with 50 A saturation and 0.8 milliohm DCR in a lower-profile 7.3 by 6.8 by 2.4 mm body. Infineon also notes several L_C parts may be placed in series to reach a target value, which helps with EMI propagation and PCB prepreg breakdown concerns at high phase count."
+    ],
+    src: "TI LC Inductor Selection, Eq. 21, 22; IFX Sections 2.5, 3; Renesas layout examples"
   },
   rlc: {
     t: "L_C winding resistance (R_DCR,Lc)",
-    d: "DC resistance of the compensating inductor itself. Combines with the secondary DCRs and routing to set both the loop decay time constant and the conduction loss.",
-    src: "TI Eq. 23, 26"
+    d: "DC resistance of the compensating inductor. Sets loop decay time together with the secondary and routing resistance.",
+    long: [
+      "This resistance sits in the compensating loop, which carries only AC current in steady state. Renesas notes that because this path sees no DC load current, its resistance can be tolerated higher than the primary winding path, where DC current makes low resistance critical.",
+      "That said, it still does two jobs. It contributes to the loop conduction loss, which scales with the square of the loop RMS current, and it sets how quickly loop current decays after a transient.",
+      "Real parts vary widely. The two Renesas examples span 0.17 milliohm for a taller hard-saturating ferrite and 0.8 milliohm for a low-profile soft-saturating moulded part, which is nearly a factor of five for the same functional role. Form factor, saturation behaviour and resistance are traded against each other in the same part choice.",
+      "The chart plots decay time and loop loss against total loop resistance, so you can see what changing this component actually buys."
+    ],
+    src: "IFX Eq. 57; TI Eq. 23, 26; Renesas equivalent circuit model and layout examples"
   },
   rsec: {
     t: "Secondary winding resistance (R_DCR,sec)",
-    d: "DC resistance of one trans-inductor secondary winding. It appears multiplied by N because all N secondaries sit in series in the compensating loop.",
-    src: "TI Eq. 23, 26"
+    d: "DC resistance of one trans-inductor secondary. Multiplied by N, since all secondaries sit in series in the loop.",
+    long: [
+      "All N secondary windings are connected in series in the compensating loop, so this resistance enters every loop calculation multiplied by phase count. At four phases a 0.3 milliohm secondary contributes 1.2 milliohm, typically the largest single term in the loop.",
+      "Do not confuse this with the primary winding resistance. The primary carries the phase DC load current, so Renesas states it must be kept low, typically under 0.2 milliohm for voltage regulator designs. The secondary path carries AC only and can tolerate more. The trans-inductor primary is normally wound with more copper for exactly this reason.",
+      "Because it is multiplied by N, this term dominates loop damping. It is also the term that scales worst as you add phases, which is worth remembering if the phase count is ever revisited."
+    ],
+    src: "IFX Eq. 57; TI Eq. 23, 26; Renesas equivalent circuit model"
   },
   rroute: {
     t: "Loop routing resistance (R_routing)",
-    d: "Copper resistance of the PCB trace closing the Lc loop. Easy to underestimate on interleaved layouts where loops span the board.",
-    src: "TI Eq. 26"
+    d: "Copper resistance of the PCB trace closing the compensating loop. Easy to underestimate on spread-out layouts.",
+    long: [
+      "The compensating loop must physically close across the board, and on interleaved layouts that trace can be long. Its resistance adds directly to the loop, alongside the compensating inductor and all N secondary windings.",
+      "Layout matters here for more than resistance. Infineon advises treating the coupling loop as a noisy net, comparable to a switching node, and recommends routing the connection only on the top layer with no vias, closing the loop through second-layer ground and using vias solely at the ends of the phase and L_C arrangement.",
+      "Placement constraints are real. Infineon notes TLVR transformers can stand up to 12 mm tall, which sometimes forces L_C to the opposite side of the board. If that is done, connect both pins with via arrays, and prefer a soft-saturating part where a small form factor is required.",
+      "This term is usually the easiest of the three to reduce, and the easiest to accidentally inflate."
+    ],
+    src: "IFX Eq. 57 and Section 3; TI Eq. 26"
   },
   pcore: {
     t: "L_C core loss (P_core,Lc)",
-    d: "Magnetic loss in the compensating inductor core. Significant here because the part is excited at N x f_SW. Take it from the vendor curve at that frequency and the calculated ripple.",
-    src: "TI Eq. 26"
+    d: "Magnetic loss in the compensating inductor core. Read it from the vendor curve at N x f_SW, not at f_SW.",
+    long: [
+      "Core loss is entered manually rather than calculated, and deliberately so. Predicting it requires Steinmetz coefficients specific to a core material and geometry, which none of the reference documents provide. Any calculated figure here would be invented, so the calculator asks you for the real number instead.",
+      "Read it from your L_C vendor's curve at the excitation frequency N x f_SW and at the calculated peak-to-peak ripple, not at the per-phase switching frequency. In this design that is 2.4 MHz rather than 600 kHz, and the difference across that span is large.",
+      "TI flags core loss as potentially significant precisely because of this high effective frequency, and recommends low core-loss materials such as ferrite for the compensating inductor specifically. Infineon likewise notes TLVR transformer cores are mostly ferrite based for the same reason.",
+      "This value feeds the loop power loss result directly, added to the conduction loss computed from loop RMS current and total loop resistance."
+    ],
+    src: "TI Eq. 26 and LC Inductor Selection; IFX Section 2.4"
   },
 
   /* --- transient --- */

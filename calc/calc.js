@@ -165,7 +165,7 @@
       row("isatlc", "L_C saturation floor",    fx(o.iSat, 1) + " A",  "TI Eq. 22, needs margin above") +
       row("vlcmax", "Peak L_C voltage",        fx(o.vLc, 1) + " V",   "TI Eq. 24",
           { ok: o.vLc <= p.vin, label: o.vLc > p.vin ? "exceeds V_IN" : "under V_IN" }) +
-      row("taulc",  "L_C loop time constant",  eng(o.tau, "s", 2),    "TI Eq. 23") +
+      row("taulc",  "L_C loop time constant",  eng(o.tau, "s", 2),    "IFX Eq. 57 (= TI Eq. 23)") +
       row("plc",    "L_C loop power loss",     fx(o.pLc, 2) + " W",   "TI Eq. 26");
   }
 

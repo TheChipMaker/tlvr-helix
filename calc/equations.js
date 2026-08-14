@@ -179,3 +179,11 @@ EQ.cinPenalty = ({ Lm, Lc, N }) => (Lm / Lc) * N;
 // Output voltage ripple including ESR and ESL   [IFX Eq. 19]
 EQ.vOutRippleFull = ({ dIout, Cout, N, fsw, esr = 0, esl = 0 }) =>
   dIout * (1 / (8 * Cout * N * fsw) + esr + 2 * N * fsw * esl);
+
+// Worst-case L_C current excursion during a load-step-on event   [IFX Eq. 50]
+EQ.iLcTransOn = ({ k, tTransOn, dTrans, N, vin, vout, Lc }) =>
+  (k * tTransOn * (dTrans * N * vin - N * vout)) / Lc;
+
+// L_C current excursion during load release, ramps negative   [IFX Eq. 56]
+EQ.iLcTransOff = ({ tTransOff, k, N, vout, Lc }) =>
+  (tTransOff * k * N * vout) / Lc;
