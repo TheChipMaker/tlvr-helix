@@ -1,0 +1,3 @@
+- Inductor: TDK VLBUC Series
+- Chip: 
+TI: TPS53679

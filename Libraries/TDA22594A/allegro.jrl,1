@@ -1,0 +1,27 @@
+\t (00:00:00) allegro 25.1 S040 (4446200) [6/13/2026] Windows SPB 64-bit Edition
+\t (00:00:00)     Journal start - Sat Aug  8 11:32:57 2026
+\t (00:00:00)         Host=DESKTOP-60A4PRO User=USER Pid=24644 CPUs=32
+\t (00:00:00) CmdLine= C:/Program Files/Cadence/OrCADX_25.1/tools/bin/allegro.exe tda22594a_a
+\t (00:00:00) 
+\t (00:00:00) Loading axlcore.cxt 
+\t (00:00:00) Opening existing design...
+\i (00:00:00) QtSignal SPBFoldDockArea FoldAreaTabWidget currentChanged "tda22594a_a"
+\d (00:00:00) Design opened: C:/Users/USER/Gdrive/Nurvia/Projects/tlvr-helix/Libraries/TDA22594A/tda22594a_a.dra
+\i (00:00:00) trapsize 1028
+\i (00:00:00) trapsize 1084
+\i (00:00:00) trapsize 1147
+\i (00:00:00) trapsize 1084
+\i (00:00:01) trapsize 1076
+\i (00:00:01) trapsize 1076
+\t (00:00:01) Loading NV GPU Plugin
+\i (00:00:01) trapsize 716
+\i (00:00:01) generaledit 
+\t (00:00:01) [11:32:58.072448] Periodic Lic check successful
+[11:32:58.596737] Feature usage summary:
+
+\i (00:00:14) exit 
+\t (00:00:15) Lic Summary:
+[11:33:12.153480] Cdslmd servers:C:\Users\USER\AppData\Roaming\Cadence\VBL\SPB\license\license.txt
+[11:33:12.153674] Feature usage summary:
+
+\t (00:00:15)     Journal end - Sat Aug  8 11:33:12 2026
