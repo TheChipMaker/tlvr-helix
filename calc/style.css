@@ -272,6 +272,7 @@ legend{
 .panel .close:focus-visible{outline:2px solid var(--signal); outline-offset:2px}
 .panel-body{padding:22px; overflow-y:auto}
 .panel-body .lead{font-size:14px; color:var(--text-2); margin-bottom:18px}
+.panel-body .para{font-size:13.5px; color:var(--text-2); margin-bottom:14px; line-height:1.65}
 .panel-src{
   margin-top:16px; font-family:var(--font-mono); font-size:10.5px;
   color:var(--link); letter-spacing:.04em;

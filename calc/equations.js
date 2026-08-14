@@ -148,3 +148,34 @@ EQ.iPhaseRms = (iDC, iPhRipple) =>
 /* --- on-time check ------------------------------------------------------ */
 
 EQ.tOn = (D, fsw) => D / fsw;
+
+
+/* ===========================================================================
+   Additional sourced relationships used by the detail-panel charts.
+   =========================================================================== */
+
+// TLVR transformer saturation requirement   [IFX Eq. 18]
+EQ.iSatTlvr = ({ iOutMax, N, dIph }) => iOutMax / N + dIph / 2;
+
+// Low-side MOSFET RMS current   [TI Eq. 27]  (per-phase form)
+EQ.iRmsLowSide = ({ iPhDC, D, dIph }) =>
+  iPhDC * Math.sqrt(1 - D) * Math.sqrt(1 + (1 / 3) * Math.pow(dIph / (2 * iPhDC), 2));
+
+// Output current slew advantage over a multiphase buck   [IFX Eq. 46]
+EQ.slewGainVsBuck = ({ Lm, Lc, N }) => (Lm / Lc) * N;
+
+// Control-loop crossover frequency gain   [IFX Eq. 47]
+EQ.bwGainVsBuck = ({ k, Lm, Lc, N }) => Math.pow(1 + k * k * (Lm / Lc) * N, 2);
+
+// Practical maximum crossover frequency   [IFX Eq. 48]
+EQ.fcMax = ({ tDelay, k, Lm, Lc, N, fsw }) => {
+  const g = Math.min(Math.pow(1 + k * k * (Lm / Lc) * N, 2), 8.5);
+  return 1 / (tDelay + 1 / (0.10 * g * fsw));
+};
+
+// Input capacitance penalty vs an equivalent multiphase buck   [IFX Eq. 65]
+EQ.cinPenalty = ({ Lm, Lc, N }) => (Lm / Lc) * N;
+
+// Output voltage ripple including ESR and ESL   [IFX Eq. 19]
+EQ.vOutRippleFull = ({ dIout, Cout, N, fsw, esr = 0, esl = 0 }) =>
+  dIout * (1 / (8 * Cout * N * fsw) + esr + 2 * N * fsw * esl);

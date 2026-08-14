@@ -213,7 +213,154 @@
      shows the extended text and formula only. Never a placeholder.
      =========================================================================== */
   var CHARTS = {
+vin: {
+      note: "Loop ripple and the peak L_C voltage both rise with V_IN, but not " +
+            "smoothly: raising V_IN lowers the duty cycle, which shifts how many " +
+            "phases overlap and produces the steps you see. The right axis is the " +
+            "worst-case stress on the compensating inductor and its routing.",
+      build: function (p) {
+        var a = sweep(4.25, 16, 90, function (v) {
+          return EQ.iLcRipple({ k: p.k, N: p.N, D: EQ.dutyCycle(v, p.vout),
+                                vin: v, vout: p.vout, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+        });
+        var b = sweep(4.25, 16, 90, function (v) {
+          return EQ.vLcMax({ nOn: p.nOn, vin: v, N: p.N, vout: p.vout });
+        });
+        return {
+          x: { label: "Input voltage V_IN (V)", unit: "V", values: a.xs },
+          series: [
+            { label: "L_C ripple", unit: "A", values: a.ys, axis: "left" },
+            { label: "Peak L_C voltage", unit: "V", values: b.ys, axis: "right", dash: true }
+          ],
+          marker: { value: p.vin, label: "chosen" },
+          leftLabel: "Ripple (A)", rightLabel: "Peak V_LC (V)"
+        };
+      }
+    },
 
+    vout: {
+      note: "The cusps are real, not artefacts. Wherever N x D reaches a whole " +
+            "number the phases overlap perfectly and the loop ripple falls to " +
+            "zero. Your rail sits between cusps, so it does not benefit from that " +
+            "cancellation, and V_OUT is fixed by the load in any case. Read this " +
+            "as diagnosis rather than as something to tune.",
+      build: function (p) {
+        var hi = Math.max(p.vout * 4, p.vin * 0.4);
+        var a = sweep(0.2, hi, 160, function (v) {
+          return EQ.iLcRipple({ k: p.k, N: p.N, D: EQ.dutyCycle(p.vin, v),
+                                vin: p.vin, vout: v, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+        });
+        var b = sweep(0.2, hi, 160, function (v) {
+          var D = EQ.dutyCycle(p.vin, v);
+          var iLc = EQ.iLcRipple({ k: p.k, N: p.N, D: D, vin: p.vin, vout: v,
+                                   Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
+          return EQ.iOutRipple({ k: p.k, N: p.N, D: D, fsw: p.fsw, iLc: iLc, iMag: iMag });
+        });
+        return {
+          x: { label: "Output voltage V_OUT (V)", unit: "V", values: a.xs },
+          series: [
+            { label: "L_C ripple", unit: "A", values: a.ys, axis: "left" },
+            { label: "Summed output ripple", unit: "A", values: b.ys, axis: "left", dash: true }
+          ],
+          marker: { value: p.vout, label: "chosen" },
+          leftLabel: "Ripple (A)"
+        };
+      }
+    },
+
+    nph: {
+      note: "The slew advantage on the right axis climbs steadily with phase " +
+            "count, which is the case for going wide. The ripple on the left is " +
+            "cusped, because phase count and duty cycle interact through N x D. " +
+            "TI reserves this topology for designs above six phases, marked in " +
+            "red, since the un-cancelled loop contribution grows as N falls.",
+      build: function (p) {
+        var xs = [], rip = [], gain = [], n, D, iLc, iMag;
+        for (n = 2; n <= 16; n++) {
+          D = EQ.dutyCycle(p.vin, p.vout);
+          iLc = EQ.iLcRipple({ k: p.k, N: n, D: D, vin: p.vin, vout: p.vout,
+                               Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+          iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
+          xs.push(n);
+          rip.push(EQ.iOutRipple({ k: p.k, N: n, D: D, fsw: p.fsw, iLc: iLc, iMag: iMag }));
+          gain.push(EQ.slewGainVsBuck({ Lm: p.Lm, Lc: p.Lc, N: n }));
+        }
+        return {
+          x: { label: "Phase count N_TOTAL", unit: "phases", values: xs },
+          series: [
+            { label: "Summed output ripple", unit: "A", values: rip, axis: "left" },
+            { label: "Slew gain vs buck", unit: "x", values: gain, axis: "right", dash: true }
+          ],
+          marker: { value: p.N, label: "chosen" },
+          limit: { value: 6, label: "TI guidance" },
+          leftLabel: "Ripple (A)", rightLabel: "Slew gain (x)"
+        };
+      }
+    },
+
+    itdc: {
+      note: "Ripple is independent of load, so these lines are straight and the " +
+            "gap between DC and peak stays constant. The red line is the device " +
+            "absolute maximum average current times phase count, not a usable " +
+            "continuous rating. Real headroom comes from the datasheet thermal " +
+            "derating curve at your ambient and airflow.",
+      build: function (p) {
+        var hi = Math.max(p.iTdc * 2, p.N * 90 * 1.15);
+        var D = EQ.dutyCycle(p.vin, p.vout);
+        var iLc = EQ.iLcRipple({ k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+                                 Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+        var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
+        var iPh = EQ.iPhaseRipple(iMag, p.k, iLc);
+
+        var a = sweep(0, hi, 80, function (i) { return i / p.N; });
+        var b = sweep(0, hi, 80, function (i) {
+          return EQ.iSatTlvr({ iOutMax: i, N: p.N, dIph: iPh });
+        });
+        var c = sweep(0, hi, 80, function (i) {
+          var dc = i / p.N;
+          return dc > 0 ? EQ.iRmsLowSide({ iPhDC: dc, D: D, dIph: iPh }) : 0;
+        });
+        return {
+          x: { label: "Thermal design current I_TDC (A)", unit: "A", values: a.xs },
+          series: [
+            { label: "Per-phase DC", unit: "A", values: a.ys, axis: "left" },
+            { label: "Transformer I_sat needed", unit: "A", values: b.ys, axis: "left" },
+            { label: "Low-side FET RMS", unit: "A", values: c.ys, axis: "left", dash: true }
+          ],
+          marker: { value: p.iTdc, label: "chosen" },
+          limit: { value: p.N * 90, label: "device abs max" },
+          leftLabel: "Current (A)"
+        };
+      }
+    },
+
+    k: {
+      note: "Tighter coupling lowers the effective loop inductance L_CT, which " +
+            "speeds the transient response but raises loop ripple. Coupling is " +
+            "therefore not simply better when tighter, it slides the same " +
+            "trade-off that L_C does. Results are sensitive across this range, so " +
+            "take k from the transformer datasheet or measure it.",
+      build: function (p) {
+        var D = EQ.dutyCycle(p.vin, p.vout);
+        var a = sweep(0.85, 0.999, 90, function (kk) {
+          return EQ.iLcRipple({ k: kk, N: p.N, D: D, vin: p.vin, vout: p.vout,
+                                Lc: p.Lc, Lm: p.Lm, fsw: p.fsw });
+        });
+        var b = sweep(0.85, 0.999, 90, function (kk) {
+          return EQ.lct({ k: kk, N: p.N, Lm: p.Lm, Lc: p.Lc }) * 1e9;
+        });
+        return {
+          x: { label: "Coupling coefficient k", unit: "", values: a.xs },
+          series: [
+            { label: "L_C ripple", unit: "A", values: a.ys, axis: "left" },
+            { label: "Effective loop L_CT", unit: "nH", values: b.ys, axis: "right", dash: true }
+          ],
+          marker: { value: p.k, label: "chosen" },
+          leftLabel: "Ripple (A)", rightLabel: "L_CT (nH)"
+        };
+      }
+    },
     lc: {
       note: "Both curves move against each other, which is the whole L_C " +
             "trade-off. Lower L_C ramps current faster and cuts the " +
@@ -337,10 +484,13 @@
     var body = panel.querySelector(".panel-body");
     body.innerHTML = "";
 
-    var p = document.createElement("p");
-    p.className = "lead";
-    p.textContent = t.d;
-    body.appendChild(p);
+    var paras = t.long || [t.d];
+    paras.forEach(function (txt, i) {
+      var p = document.createElement("p");
+      p.className = i === 0 ? "lead" : "para";
+      p.textContent = txt;
+      body.appendChild(p);
+    });
 
     var c = CHARTS[term];
     if (c) {

@@ -5,35 +5,72 @@
 
 var TERMS = {
   /* --- operating point --- */
-  vin: {
+vin: {
     t: "Input voltage (V_IN)",
-    d: "The bus voltage feeding the high-side FET of every phase. Sets the on-state magnetizing voltage (V_IN - V_OUT) and, importantly for TLVR, appears in the compensating-loop voltage N_ON x V_IN - N x V_OUT.",
-    src: "TI Eq. 6, 24"
+    d: "The bus voltage feeding the high-side FET of every phase. Sets the on-state magnetizing voltage and the compensating-loop voltage.",
+    long: [
+      "V_IN sets the on-state magnetizing voltage across each primary winding, V_IN - V_OUT, exactly as in an ordinary buck converter. During the off-state that voltage becomes -V_OUT.",
+      "What is specific to TLVR is the second role. The voltage across the compensating inductor is the sum of the magnetizing voltages of all phases, so it evaluates to N_ON x V_IN - N_TOTAL x V_OUT. With several phases on at once this can exceed V_IN itself, and it is the term that drives the loop ripple, the transient slew, and the voltage stress on L_C.",
+      "V_IN also fixes the duty cycle D = V_OUT / V_IN. Lowering V_IN raises D, which moves the design along the ripple-versus-duty curve and changes how many phases overlap. That coupling is why V_IN cannot be treated as a free variable once the ripple budget is set.",
+      "For the TDA22594A the recommended operating range is 4.25 V to 16 V, with an absolute maximum of 25 V on the VIN pin. The chart sweeps only the recommended range."
+    ],
+    src: "IFX Eq. 11; TI Eq. 6, 9, 24; TDA22594A Tables 5 and 7"
   },
   vout: {
     t: "Output voltage (V_OUT)",
-    d: "The regulated rail delivered to the load. With V_IN fixed it sets the duty cycle D = V_OUT / V_IN, which drives pulse overlap and therefore the whole Lc ripple picture.",
-    src: "TI Eq. 7"
+    d: "The regulated rail delivered to the load. Sets the duty cycle, which drives pulse overlap and the whole L_C ripple picture.",
+    long: [
+      "V_OUT sets the duty cycle D = V_OUT / V_IN, and D in turn decides how many phases conduct simultaneously. Infineon defines that count as roundup(N x D), with the fractional part N x D - INT(N x D) becoming the overlap duty D_HF that scales the loop ripple directly.",
+      "The consequence is a ripple curve with sharp minima. Whenever N x D lands exactly on an integer, the phases overlap perfectly, the maximum and minimum simultaneous phase counts become equal, and the loop ripple falls to zero. The calculator reproduces this: at N = 4 and V_IN = 12 V, an output of 3.0 V gives N x D = 1 and computes exactly zero ripple.",
+      "Away from those points a TLVR carries roughly 25 to 50 percent more summed ripple current than an equivalent multiphase buck, and therefore proportionally more output voltage ripple. TI notes this is often tolerable, because the capacitance demanded by the transient specification usually exceeds what the ripple specification alone would require.",
+      "At 0.75 V with four phases, N x D = 0.25 sits well away from a cusp, so this design does not benefit from the cancellation. The chart shows where the nearest minima lie."
+    ],
+    src: "IFX Eq. 7-11; TI Fig. 20 and Steady-State Ripple section"
   },
   fsw: {
     t: "Switching frequency per phase (f_SW)",
-    d: "Frequency of each individual phase. The compensating inductor sees N x f_SW, not f_SW, so a 4-phase design at 600 kHz runs 2.4 MHz through Lc. Higher f_SW shrinks the magnetics but pushes Lc core loss up fast.",
-    src: "TI, LC Inductor Selection"
+    d: "Frequency of each individual phase. The compensating inductor is excited at N x f_SW, so its core loss rises far faster than the phase frequency suggests.",
+    long: [
+      "Every ripple term carries f_SW in its denominator, so raising the frequency shrinks both the magnetizing ripple and the loop ripple. On its own that makes higher frequencies look like a free improvement.",
+      "It is not free, because the compensating inductor does not switch at f_SW. Infineon and TI both give its excitation frequency as N x f_SW when there is no pulse overlap. In this four-phase design, 600 kHz per phase means 2.4 MHz through L_C, and 1 MHz per phase would mean 4 MHz. Ferrite core loss climbs steeply over that range, which is why TI recommends low core-loss materials for this component specifically.",
+      "Frequency also bounds the control loop. Infineon limits the practical crossover frequency to between 10 and 85 percent of f_SW, further reduced by the controller's own delay. Their worked example of 500 kHz with eight phases and L_M equal to L_C yields a maximum crossover of about 385 kHz.",
+      "Read the right-hand axis of the chart against your L_C vendor's core-loss curve at that frequency. The ripple benefit on the left axis is only half the trade."
+    ],
+    src: "IFX Eq. 4, 5, 11, 48; TI, LC Inductor Selection"
   },
   nph: {
     t: "Phase count (N_TOTAL)",
-    d: "Number of paralleled phases sharing one Lc loop. TLVR benefit scales with N: the transient boost term goes as N-squared, but so does the un-cancelled Lc ripple. TLVR is normally favoured above 6 phases.",
-    src: "TI Eq. 18, 20, 25"
+    d: "Number of paralleled phases sharing one L_C loop. The transient benefit scales with N, but so does the un-cancelled loop ripple contribution.",
+    long: [
+      "Phase count enters the TLVR relationships more than once. The loop voltage is N_ON x V_IN - N_TOTAL x V_OUT, the falling slope gains a term proportional to N squared, and the slew advantage over an equivalent buck approaches (L_M / L_C) x N for tight coupling.",
+      "The cost appears in the ripple. In an ordinary multiphase buck the phase ripples cancel through interleaving. In a TLVR the loop current I_LC adds once for every phase and does not cancel, so the summed ripple carries a term k x N x dI_Lc that grows with phase count.",
+      "TI states that as loop ripple increases at lower phase numbers this additional component can become significant, and gives that as one reason TLVR designs are typically reserved for high-power designs above six phases. This four-phase design sits below that guidance, which is a deliberate accepted trade rather than an oversight.",
+      "Phase count also interacts with duty cycle through N x D, so changing N moves the design along the same cusped ripple curve that V_OUT does. The chart shows both effects together: summed ripple on the left, slew advantage on the right."
+    ],
+    src: "IFX Eq. 7, 16, 17, 46; TI Eq. 18, 20, 25 and Power Loss section"
   },
   itdc: {
     t: "Thermal design current (I_TDC)",
-    d: "Sustained DC output current the rail must carry. Divided by N it gives the per-phase DC pedestal that sets power-stage conduction loss and inductor DC bias.",
-    src: "Design input"
+    d: "Sustained DC output current the rail must carry. Divided by N it sets the per-phase pedestal driving conduction loss and inductor DC bias.",
+    long: [
+      "I_TDC divided by phase count gives the DC pedestal each phase carries. The ripple current rides on top of that pedestal, so the peak a phase actually sees is the DC value plus half the total phase ripple.",
+      "That peak sets the transformer requirement. Infineon states the TLVR transformer saturation current must be at least I_out_max / N plus half the peak-to-peak phase ripple. Because TLVR phase ripple includes the coupled loop contribution, this requirement is higher than the equivalent buck design would produce at the same load.",
+      "The same ripple raises conduction loss in the power stage. TI's low-side RMS expression shows RMS current rising with the square of the ripple-to-DC ratio, which is why TLVR-optimised power stages must be rated for higher RMS current and for peak pulses approaching twice their RMS rating.",
+      "One caution on the device limit shown in red: 90 A is the TDA22594A absolute maximum average output current, not a usable continuous rating. The datasheet thermal derating curve reduces the permissible continuous current with ambient temperature and airflow. Read your real operating point off that curve rather than designing to the absolute maximum."
+    ],
+    src: "IFX Eq. 18; TI Eq. 27 and TLVR-Optimized Components; TDA22594A Tables 5 and 8, Figure 7"
   },
   k: {
     t: "Coupling coefficient (k)",
-    d: "How tightly the primary and secondary windings of the trans-inductor are coupled. Real parts land around 0.95-0.99. Leakage (1-k) blunts the Lc coupling, so k appears squared in the transient and ripple terms.",
-    src: "IFX Eq. 11, 29; REN"
+    d: "How tightly primary and secondary windings couple. Real parts land near 0.95 to 0.99, and leakage appears squared in the ripple and transient terms.",
+    long: [
+      "Perfect coupling does not exist. The shortfall shows up as leakage inductance, and because all N secondary windings sit in series in the compensating loop, each contributes leakage to that loop. The effective loop inductance is therefore larger than L_C alone.",
+      "Renesas expresses this as L_CT = (1 - k squared) x L_M x N + L_C. This correction is substantial, not a refinement: for their eight-phase example with L_M = 200 nH, L_C = 150 nH and k = 0.98, the effective loop inductance is 213 nH rather than 150 nH. Using bare L_C over-predicted the loop ripple by roughly 40 percent in this calculator until the correction was applied.",
+      "Because leakage raises effective loop inductance, higher k means lower L_CT, which means more loop ripple but faster transient response. Coupling is therefore not simply better when tighter; it moves the same trade-off that L_C does.",
+      "Coupling also sets the achievable control bandwidth. Infineon gives the crossover gain over an equivalent buck as the square of (1 + k squared x L_M / L_C x N), so k appears squared there too. Note that this gain saturates in practice against the limit in their Equation 48.",
+      "Take k from the transformer datasheet where it is published. Where it is not, measure it rather than assuming, since the chart shows results are sensitive across the plausible 0.90 to 0.99 range."
+    ],
+    src: "Renesas L_CT derivation; IFX Eq. 11, 29, 47, 48"
   },
 
   /* --- magnetics --- */
