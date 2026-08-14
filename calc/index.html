@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLVR Design Calculator — tlvr-helix</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="brand">
+    <span class="mark">TLVR</span>
+    <span class="sub">Trans-Inductor Voltage Regulator &mdash; design calculator</span>
+  </div>
+  <div class="toolbar">
+    <select id="preset" title="Load a stored design">
+      <option value="">Load preset&hellip;</option>
+      <option value="helix">Helix — 4ph, 12V &rarr; 0.75V</option>
+      <option value="ti">TI Table 2 — 4ph, 12V &rarr; 0.8V</option>
+      <option value="ren">Renesas example — 8ph, 12V &rarr; 1.8V</option>
+    </select>
+    <button id="save" type="button">Save JSON</button>
+    <button id="loadBtn" type="button">Open JSON</button>
+    <input id="loadFile" type="file" accept=".json" hidden>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ INPUTS ============ -->
+  <section class="col inputs">
+
+    <fieldset>
+      <legend>Operating point</legend>
+      <div class="grid">
+        <label data-term="vin">Input voltage<span class="u">V</span><input id="vin" type="number" step="any" value="12"></label>
+        <label data-term="vout">Output voltage<span class="u">V</span><input id="vout" type="number" step="any" value="0.75"></label>
+        <label data-term="fsw">Switching freq<span class="u">kHz</span><input id="fsw" type="number" step="any" value="600"></label>
+        <label data-term="nph">Phase count<span class="u">&mdash;</span><input id="nph" type="number" step="1" value="4"></label>
+        <label data-term="itdc">Thermal design current<span class="u">A</span><input id="itdc" type="number" step="any" value="240"></label>
+        <label data-term="k">Coupling coefficient<span class="u">&mdash;</span><input id="k" type="number" step="any" value="0.98"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Magnetics</legend>
+      <div class="grid">
+        <label data-term="lm">Magnetizing inductance<span class="u">nH</span><input id="lm" type="number" step="any" value="150"></label>
+        <label data-term="lc">Compensating inductance<span class="u">nH</span><input id="lc" type="number" step="any" value="180"></label>
+        <label data-term="rlc">L_C winding DCR<span class="u">m&#8486;</span><input id="rlc" type="number" step="any" value="0.4"></label>
+        <label data-term="rsec">Secondary DCR (each)<span class="u">m&#8486;</span><input id="rsec" type="number" step="any" value="0.3"></label>
+        <label data-term="rroute">Loop routing R<span class="u">m&#8486;</span><input id="rroute" type="number" step="any" value="0.5"></label>
+        <label data-term="pcore">L_C core loss<span class="u">W</span><input id="pcore" type="number" step="any" value="0.2"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Transient</legend>
+      <div class="grid">
+        <label data-term="istep">Load step<span class="u">A</span><input id="istep" type="number" step="any" value="200"></label>
+        <label data-term="tstep">Step duration<span class="u">ns</span><input id="tstep" type="number" step="any" value="500"></label>
+        <label data-term="dvac">Allowed AC deviation<span class="u">mV</span><input id="dvac" type="number" step="any" value="30"></label>
+        <label data-term="rll">Load line<span class="u">m&#8486;</span><input id="rll" type="number" step="any" value="0"></label>
+        <label data-term="tresp">Controller response<span class="u">&micro;s</span><input id="tresp" type="number" step="any" value="1"></label>
+        <label data-term="non">Phases on in step<span class="u">&mdash;</span><input id="non" type="number" step="1" value="4"></label>
+        <label data-term="dramp">Ramp duty cycle<span class="u">&mdash;</span><input id="dramp" type="number" step="any" value="0.9"></label>
+        <label data-term="tdelay">Controller delay<span class="u">ns</span><input id="tdelay" type="number" step="any" value="200"></label>
+        <label data-term="cout">Planned C_OUT<span class="u">&micro;F</span><input id="cout" type="number" step="any" value="5000"></label>
+      </div>
+    </fieldset>
+
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section class="col results">
+
+    <fieldset>
+      <legend>Operating point</legend>
+      <div class="rows" id="r-op"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Steady-state ripple</legend>
+      <div class="rows" id="r-ripple"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Transient response</legend>
+      <div class="rows" id="r-trans"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Component limits</legend>
+      <div class="rows" id="r-limits"></div>
+    </fieldset>
+
+  </section>
+
+</main>
+
+<footer>
+  Equations sourced from the TI TLVR seminar topic (Rev.&nbsp;A), the Infineon
+  multiphase-buck-with-TLVR application note (v1.4), and the Renesas TLVR design
+  equations deck. Each result carries its source reference. Estimates only &mdash;
+  confirm against simulation before committing a design.
+</footer>
+
+<div id="tip" role="tooltip" hidden></div>
+
+<script src="equations.js"></script>
+<script src="terms.js"></script>
+<script src="calc.js"></script>
+</body>
+</html>
