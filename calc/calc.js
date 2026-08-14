@@ -153,7 +153,7 @@
           { ok: gainUp > 1, label: fx(gainUp, 2) + "x buck" }) +
       row("slopedn", "Falling I_SUM slope",     eng(o.slDn, "A/s", 2),                "TI Eq. 20",
           { ok: gainDn > 1, label: fx(gainDn, 2) + "x buck" }) +
-      row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2),               "TI Eq. 1") +
+      row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2),               "TI Eq. 1 \u2014 no IFX/REN equivalent") +
       row(null,      "C_OUT required (release)", eng(o.coutDn, "F", 2),               "TI Eq. 1, Eq. 20 slope") +
       row("coutdelay","C_OUT for controller delay", eng(o.coutDly, "F", 2),           "IFX Eq. 32") +
       row(null,      "C_OUT governing value",   eng(o.coutNeed, "F", 2),              "max of the three",
@@ -269,6 +269,22 @@
     };
     r.readAsText(f);
   });
+
+  /* ---- theme ---- */
+  var themeBtn = $("theme");
+  function setTheme(mode) {
+    document.documentElement.setAttribute("data-theme", mode);
+    themeBtn.textContent = mode === "dark" ? "Light" : "Dark";
+    try { localStorage.setItem("tlvr-theme", mode); } catch (e) {}
+  }
+  themeBtn.addEventListener("click", function () {
+    var now = document.documentElement.getAttribute("data-theme");
+    setTheme(now === "dark" ? "light" : "dark");
+  });
+  var saved = null;
+  try { saved = localStorage.getItem("tlvr-theme"); } catch (e) {}
+  setTheme(saved || (window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 
   /* ---- boot ---- */
   decorateInputs();

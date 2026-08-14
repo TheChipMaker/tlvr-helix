@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLVR Design Calculator — tlvr-helix</title>
+<title>TLVR Design Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,6 +17,7 @@
     <span class="sub">Trans-Inductor Voltage Regulator &mdash; design calculator</span>
   </div>
   <div class="toolbar">
+    <button id="theme" type="button" title="Switch between light and dark">Dark</button>
     <select id="preset" title="Load a stored design">
       <option value="">Load preset&hellip;</option>
       <option value="helix">Helix — 4ph, 12V &rarr; 0.75V</option>

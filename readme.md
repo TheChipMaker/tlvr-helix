@@ -88,7 +88,9 @@ Location: `calc/`. Open `calc/index.html` directly in a browser — it runs from
 
 - **No ES modules.** Browsers block `import`/`export` under `file://`. All scripts
   are plain `<script>` tags. `equations.js` declares `var EQ = {}`.
-- **No external fonts, CDNs or frameworks.** The tool must work offline.
+- **Brand fonts load from Google Fonts with full system fallbacks.** No other
+  external dependency: no CDN libraries, no frameworks. The tool must remain
+  usable offline, degrading to system fonts.
 - **No build step.** Editing a file and refreshing must be the whole workflow.
 
 ### Features
@@ -100,6 +102,122 @@ Location: `calc/`. Open `calc/index.html` directly in a browser — it runs from
   L_C voltage against V_IN, ripple as a percentage of DC).
 - Presets: this design, the TI Table 2 case, and the Renesas worked example.
 - Save/open the input set as JSON.
+
+---
+
+## 3b. Brand guide
+
+All project output — the calculator, documents, web — follows the corporate
+brand guide v2. Company logo and wordmark are **not** used inside the
+calculator; only the colour, type and tone system applies.
+
+### Colour tokens
+
+**Neutrals — cool engineered graphite**
+
+| Token | Hex | Use |
+|---|---|---|
+| Ink | `#0E1116` | Primary text, dark surfaces, HMI |
+| Ink 2 | `#161A20` | Cards on dark, panel tiles |
+| Ink 3 | `#1F242C` | Raised dark tile |
+| Slate | `#59626E` | Labels, secondary text on light |
+| Slate dark | `#8A94A1` | Secondary text on dark |
+| Line | `#E7E9ED` | Hairlines on light |
+| Line 2 | `#DADDE2` | Stronger hairline |
+| Line dark | `#242A32` | Hairlines on dark |
+| Paper | `#FFFFFF` | Light background |
+| Paper 2 | `#F6F7F9` | Light section tint |
+
+**Semantic four — the signature**
+
+| Token | Hex | Meaning |
+|---|---|---|
+| `--ready` | `#15B86A` | Ready / go / charging / success. Also the brand accent |
+| `--ready-bright` | `#2BD27D` | Live accent on dark |
+| `--ready-deep` | `#0C7A48` | Legible green text on light |
+| `--signal` | `#2C66EA` | Interactive: buttons, links, selected, info |
+| `--signal-deep` | `#1B4FCB` | Legible blue text on light |
+| `--fault` | `#EF4444` | Fault / stop / destructive |
+| `--warn` | `#F5C542` | Caution / thermal derate / waiting |
+
+### The colour rule — do not break this
+
+Green does two jobs deliberately: it is the brand accent **and** the
+ready/success signal. These are never split. **Green only ever means ready.**
+Never decoration, never a category colour, never a heading accent.
+
+When something is *clickable* — a different idea from "good" — it uses Signal
+blue, so interactivity never competes with the go-signal.
+
+In the calculator this means: legends, `?` markers, focus rings and tooltip
+rules are blue; pass chips are green; fail chips are red. No other accent
+colour appears anywhere. The earlier copper accent was removed for this reason.
+
+### Typography
+
+| Role | Font / weight | Size · line-height |
+|---|---|---|
+| Hero / H1 | Sora 800 | clamp 36–60px · 1.02 |
+| H2 | Sora 700 | 30px · 1.2 |
+| H3 | Sora 600 | 17–20px · 1.3 |
+| Body | Inter 400 | 16px · 1.55 |
+| Body strong | Inter 600 | 16px · 1.55 |
+| Small / caption | Inter 400 | 12–13px · 1.4 |
+| Eyebrow / tag | JetBrains Mono 500 | 11–12px · upper · .12em |
+| Data / specs | JetBrains Mono 400–500 | 13–15px · 1.5 |
+
+**Every measured value uses JetBrains Mono** — voltages, currents,
+inductances, part numbers, IDs. This is non-negotiable in both the calculator
+and all documents.
+
+Web embed:
+
+```html
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+```
+
+All three are free Google Fonts.
+
+### Offline conflict — known compromise
+
+The brand requires Google-hosted fonts, but the calculator must run from
+`file://` with no network. Current resolution: load the Google Fonts link with
+complete system fallbacks, so typography is brand-correct online and degrades
+gracefully offline. To make it brand-exact offline, download the woff2 files to
+`calc/fonts/` and switch to local `@font-face` declarations.
+
+### Other tokens
+
+- Radius: `16px` standard, `10px` small
+- Ink is `#0E1116` for dark surfaces — **not** pure black
+
+### Voice and tone
+
+Sound like a competent engineer who respects the reader's time: precise where
+it is safety-critical, plain-spoken everywhere else. Numbers are exact,
+instructions are verbs.
+
+- **Precise** — state the real number, unit and standard. Never round away a
+  spec someone relies on.
+- **Plain** — for non-specialist readers use everyday verbs, no jargon.
+- **Calm under fault** — say what happened and the one next action. No alarm,
+  no blame, no exclamation marks.
+
+This applies to tooltip text and result labels in the calculator.
+
+### Light and dark modes
+
+The calculator supports both. Theme is chosen by, in order: a previously saved
+choice in `localStorage`, then the operating-system preference, then light.
+The toggle sits in the masthead. Both modes use the same semantic tokens — the
+colour meanings never change between surfaces, only the neutral roles swap.
+
+### Confidentiality note
+
+The saved brand-guide HTML export contains a `window.__OMELETTE_ME__` block
+with account email and organization UUIDs. Do not commit that file to the
+public repository.
 
 ---
 
