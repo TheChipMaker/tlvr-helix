@@ -174,14 +174,28 @@
     render(p, solve(p));
   }
 
-  /* ---- tooltips ---- */
+  window.TLVR = { readInputs: readInputs, solve: solve };
+
+/* ---- tooltips ----
+     The tooltip stays open while the pointer is over it, so the "Learn more"
+     button inside is reachable. A short dismiss delay plus a CSS bridge across
+     the gap covers the travel from the ? to the panel.                       */
   var tip = $("tip");
+  var tipTimer = null, tipTerm = null;
+
   function showTip(el) {
-    var t = TERMS[el.getAttribute("data-term")];
+    var term = el.getAttribute("data-term");
+    var t = TERMS[term];
     if (!t) return;
+    clearTimeout(tipTimer);
+    tipTerm = term;
+
+    var more = window.TLVRDetail
+      ? '<button type="button" class="more">Learn more</button>' : "";
     tip.innerHTML = "<h4>" + t.t + "</h4><p>" + t.d +
-                    '</p><span class="src">Source: ' + t.src + "</span>";
+                    '</p><span class="src">Source: ' + t.src + "</span>" + more;
     tip.hidden = false;
+
     var r = el.getBoundingClientRect();
     var x = r.left + window.scrollX;
     var y = r.bottom + window.scrollY + 8;
@@ -191,19 +205,41 @@
     tip.style.left = Math.max(8, x) + "px";
     tip.style.top = y + "px";
   }
-  function hideTip() { tip.hidden = true; }
+
+  function queueHide() {
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(function () { tip.hidden = true; }, 220);
+  }
+  function hideTip() { clearTimeout(tipTimer); tip.hidden = true; }
 
   document.addEventListener("mouseover", function (e) {
     if (e.target.classList && e.target.classList.contains("q")) showTip(e.target);
   });
   document.addEventListener("mouseout", function (e) {
-    if (e.target.classList && e.target.classList.contains("q")) hideTip();
+    if (e.target.classList && e.target.classList.contains("q")) queueHide();
   });
+  tip.addEventListener("mouseenter", function () { clearTimeout(tipTimer); });
+  tip.addEventListener("mouseleave", queueHide);
+
+  tip.addEventListener("click", function (e) {
+    if (e.target.classList.contains("more") && tipTerm) {
+      hideTip();
+      window.TLVRDetail.open(tipTerm);
+    }
+  });
+
   document.addEventListener("focusin", function (e) {
     if (e.target.classList && e.target.classList.contains("q")) showTip(e.target);
   });
-  document.addEventListener("focusout", hideTip);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") hideTip(); });
+
+  /* clicking the ? itself opens the detail panel directly */
+  document.addEventListener("click", function (e) {
+    if (e.target.classList && e.target.classList.contains("q")) {
+      hideTip();
+      window.TLVRDetail.open(e.target.getAttribute("data-term"));
+    }
+  });
 
   /* attach a "?" to every input label that declares a term */
   function decorateInputs() {
