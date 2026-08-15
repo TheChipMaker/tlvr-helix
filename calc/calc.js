@@ -154,9 +154,9 @@
       row("slopedn", "Falling I_SUM slope",     eng(o.slDn, "A/s", 2),                "TI Eq. 20",
           { ok: gainDn > 1, label: fx(gainDn, 2) + "x buck" }) +
       row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2),               "TI Eq. 1 \u2014 no IFX/REN equivalent") +
-      row(null,      "C_OUT required (release)", eng(o.coutDn, "F", 2),               "TI Eq. 1, Eq. 20 slope") +
+      row("coutrel", "C_OUT required (release)", eng(o.coutDn, "F", 2),               "TI Eq. 1, Eq. 20 slope") +
       row("coutdelay","C_OUT for controller delay", eng(o.coutDly, "F", 2),           "IFX Eq. 32") +
-      row(null,      "C_OUT governing value",   eng(o.coutNeed, "F", 2),              "max of the three",
+      row("coutgov", "C_OUT governing value",   eng(o.coutNeed, "F", 2),              "max of the three",
           { ok: coutOk, label: coutOk ? "planned OK" : "short" }) +
       row("lcmax",   "Max L_C for slew target", eng(o.lcMax, "H", 1),                 "IFX Eq. 31",
           { ok: lcOk, label: lcOk ? "L_C OK" : "L_C too large" });

@@ -248,7 +248,42 @@
   }
 
   var CHARTS = {
-
+    coutgov: {
+      note: "Three criteria, all of which must be met, so the highest line " +
+        "governs. Watch where they cross: the two slope-based curves grow " +
+        "with the square of step size while the controller-delay curve is " +
+        "linear, so which one dominates depends on how large the step is. " +
+        "The release curve sits far above the step-up curve because a load " +
+        "release is driven only by N x V_OUT.",
+      build: function (p) {
+        var hi = Math.max(p.iStep * 2, 100);
+        var su = EQ.slopeUpTlvr({
+          nOn: p.nOn, N: p.N, vin: p.vin, vout: p.vout,
+          Lm: p.Lm, Lc: p.Lc
+        });
+        var sd = EQ.slopeDownTlvr({ N: p.N, vout: p.vout, Lm: p.Lm, Lc: p.Lc });
+        var a = sweep(1, hi, 80, function (i) {
+          return EQ.coutRequired({ iStep: i, slope: su, dVac: p.dVac, rLL: p.rLL }) * 1e6;
+        });
+        var b = sweep(1, hi, 80, function (i) {
+          return EQ.coutRequired({ iStep: i, slope: sd, dVac: p.dVac, rLL: p.rLL }) * 1e6;
+        });
+        var c = sweep(1, hi, 80, function (i) {
+          return EQ.coutMinDelay({ tDelay: p.tDelay, iStep: i, dVout: p.dVac }) * 1e6;
+        });
+        return {
+          x: { label: "Load step I_STEP (A)", unit: "A", values: a.xs },
+          series: [
+            { label: "Step up (TI Eq. 1)", unit: "\u00B5F", values: a.ys, axis: "left" },
+            { label: "Release (TI Eq. 20 slope)", unit: "\u00B5F", values: b.ys, axis: "left" },
+            { label: "Controller delay (IFX Eq. 32)", unit: "\u00B5F", values: c.ys, axis: "left", dash: true }
+          ],
+          marker: { value: p.iStep, label: "chosen" },
+          limit: { value: NaN, label: "" },
+          leftLabel: "Required C_OUT (\u00B5F)"
+        };
+      }
+    },
     rlc: loopResistanceChart(
       "Lower resistance means lower loss but a longer decay time, so the two " +
       "curves oppose each other. Infineon warns that this decay is normally " +

@@ -188,6 +188,29 @@ vin: {
     d: "Total bulk plus ceramic capacitance at the load. Enter your actual planned value here; the tool compares it against what the transient spec demands.",
     src: "TI Eq. 1"
   },
+  coutgov: {
+    t: "C_OUT governing value",
+    d: "The largest of the three capacitance criteria. This is the one your design must actually satisfy.",
+    long: [
+      "Three separate requirements are evaluated, and capacitance must satisfy all of them, so the largest wins. The first two come from TI Equation 1 applied to the rising and falling current slopes: while the converter ramps its summed current toward the new load, the capacitors alone supply the difference, and that charge deficit becomes voltage deviation. The third is Infineon Equation 32, covering the window before the controller has even reached its ramp duty cycle.",
+      "Which one governs is worth understanding rather than just reading off. The two slope-based criteria are rarely equal, because a TLVR ramps current up and down at very different rates. On a load step the loop sees N_ON x V_IN - N x V_OUT, which is large. On a load release every phase is off and the only voltage driving current down is N x V_OUT, which at a low-voltage rail is small. The release is therefore much slower and usually sets the capacitance.",
+      "Infineon notes that the delay criterion is usually covered by the ceramic capacitors placed at the load, and that it is in most cases a much more stringent requirement than the ripple-voltage criterion. That is why ripple alone rarely sizes a TLVR output filter.",
+      "A fourth criterion exists that this calculator does not yet evaluate: minimum capacitance for output voltage ripple, Infineon Equation 21. It requires the ESR of the capacitor array, which is not currently an input. Since the transient criteria almost always dominate, adding it would change the governing value only in unusual designs.",
+      "If the governing value exceeds your planned capacitance, the levers are a smaller L_C to steepen the slopes, a wider AC deviation budget if the load permits, a load line if one is allowed, or simply more capacitance."
+    ],
+    src: "TI Eq. 1, 18, 20; IFX Eq. 21, 32"
+  },
+  coutrel: {
+    t: "C_OUT required on load release",
+    d: "Capacitance needed to contain overshoot when load current drops. Usually the harder of the two transient cases at low output voltages.",
+    long: [
+      "When the load drops, the converter turns all phases off simultaneously and current must decay. TI gives the buck falling slope as -N x V_OUT / L_M, with the TLVR adding a further term that scales with the square of phase count. Until the current has fallen, the excess flows into the output capacitors and pushes the voltage up.",
+      "The critical point is which voltage drives this. On a step up, the compensating loop sees N_ON x V_IN - N x V_OUT. On a release it sees only N x V_OUT. At a 0.75 V rail that is 3 V against 45 V, so the fall is roughly fifteen times slower than the rise and demands far more capacitance.",
+      "This asymmetry is inherent to low-voltage rails and cannot be tuned away, because V_OUT is fixed by the load. Reducing L_C steepens both slopes and is the main lever available.",
+      "Infineon adds a warning relevant here. Using non-linear control such as tri-stating all phases to suppress release overshoot is not recommended, because energy keeps recirculating in the coupling loop and decays only at the loop time constant. If the controller releases the tri-state before that current has decayed sufficiently, the stored energy is delivered back to the output, which at some load frequencies can compound into growing current excursions capable of destroying the power stage."
+    ],
+    src: "TI Eq. 1, 19, 20; IFX Section 2.5 on load release"
+  },
 
   /* --- results --- */
   duty: {
