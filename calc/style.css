@@ -324,3 +324,12 @@ footer{
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important; animation:none !important}
 }
+/* module mode reuses the two-column layout */
+#module-mode{
+  display:grid;
+  grid-template-columns:minmax(320px,1fr) minmax(360px,1.05fr);
+  gap:20px; padding:24px 28px 8px; align-items:start;
+  max-width:1400px; margin:0 auto;
+}
+#module-mode[hidden]{display:none}
+@media (max-width:860px){ #module-mode{grid-template-columns:1fr} }

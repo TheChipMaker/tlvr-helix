@@ -333,6 +333,55 @@ vin: {
     d: "DC pedestal plus half the total phase ripple. Must sit inside the power stage peak rating, and the trans-inductor must not saturate here.",
     src: "Derived"
   },
+  m_stages: {
+    t: "Phases per module",
+    d: "How many independent phases one module contains: one power stage plus one TLVR transformer each.",
+    long: [
+      "This is the granularity of the product. Two phases per module means the integrator can only build systems in multiples of two, which is normally fine since TLVR designs favour even, symmetric phase counts.",
+      "Do not confuse this with dual-phase mode. Here each phase has its own transformer and its own PWM. In dual-phase mode two power stages share one transformer and one PWM, and Infineon requires halving both L_M and L_C in the calculation. If your module drives two stages from one PWM, use the design calculator's dual-phase treatment instead."
+    ],
+    src: "IFX Section 2.8.1 for the dual-phase distinction"
+  },
+  m_isat: {
+    t: "Transformer saturation current",
+    d: "The saturation rating of the TLVR transformer inside the module. Sets how much loop ripple the module can tolerate.",
+    long: [
+      "This is the number that determines your headline integrator spec. Infineon requires the TLVR transformer saturation current to be at least the per-phase load current plus half the peak-to-peak phase ripple. Rearranged, the margin between saturation and rated current is what is available for ripple.",
+      "The consequence of getting it wrong is severe. Infineon states that if the compensating inductor saturates, the steep current ramp translates into every phase and drives the transformers into saturation as well. The controller then loses control and the power stage sees effectively a short, which can destroy it.",
+      "Take this from the transformer vendor's curve at operating temperature, not at 25 degrees. Saturation degrades with temperature, and TLVR transformer cores are typically ferrite, which Infineon notes requires careful study of the saturation characteristic at high current and temperature."
+    ],
+    src: "IFX Eq. 18 and Sections 2.4, 2.5"
+  },
+  m_irated: {
+    t: "Rated current per phase",
+    d: "The continuous current one phase is specified for, from thermal derating rather than the device absolute maximum.",
+    long: [
+      "This should come from the power stage thermal derating curve at the ambient temperature and airflow your module is specified for, not from the absolute maximum rating. For the TDA22594A the absolute maximum average output current is 90 A, but the usable continuous figure in still air at elevated ambient is considerably lower.",
+      "The gap between this value and the transformer saturation current is the entire ripple budget you can offer an integrator. Rating the module conservatively here leaves more headroom for their L_C choice; rating it aggressively narrows what they can do.",
+      "Note that TI advises TLVR-optimised power stages must support peak current pulses approaching twice their RMS rating for short durations, so peak capability and continuous rating are separate questions."
+    ],
+    src: "IFX Eq. 18; TI TLVR-Optimized Components; TDA22594A Table 8 and Figure 7"
+  },
+  m_rpri: {
+    t: "Primary winding DCR",
+    d: "Resistance of the primary winding, which carries the phase DC load current. Must be low.",
+    long: [
+      "The primary carries the full per-phase load current, so its resistance directly sets steady-state conduction loss. Renesas states this path must be kept low, typically under 0.2 milliohm for voltage regulator designs, and Infineon notes the primary is normally wound with more copper than the secondary for exactly this reason.",
+      "This does not appear in the compensating loop calculations, because the loop is the secondary path. It matters for module efficiency and thermals, which is your problem rather than the integrator's."
+    ],
+    src: "Renesas equivalent circuit model; IFX Section 2.4"
+  },
+  m_count: {
+    t: "Modules in system",
+    d: "How many modules the integrator chains together. Sets total phase count and total current.",
+    long: [
+      "Total phase count is modules times phases per module, and nearly every system-level quantity follows from it. Total current scales linearly. Secondary winding resistance in the loop scales linearly, since all secondaries sit in series. Leakage contributed to the loop scales linearly.",
+      "The one that scales dangerously is secondary interconnect voltage. The worst-case loop voltage is N_ON times V_IN minus N times V_OUT, so with all phases firing it grows roughly in proportion to phase count. At four phases and a 12 V input that is around 45 V, but at sixteen phases it approaches 180 V. Your inter-module connector must survive the largest system you intend to support.",
+      "Note also that at high phase count the leakage from the modules themselves may exceed the minimum loop inductance needed, at which point no discrete L_C is strictly required for ripple and it becomes purely a transient tuning choice. Infineon makes the same observation for high-frequency designs.",
+      "Infineon additionally suggests splitting very high phase counts into multiple coupling loops, but warns that a sixteen-phase design split into two eight-phase loops ramps current by two times eight squared rather than sixteen squared, and that coupling current can be substantially larger than a single-loop arrangement."
+    ],
+    src: "TI Eq. 24 and Phase Multiplication; IFX Sections 2.8.2, 2.5"
+  },
   iphrms: {
     t: "Per-phase RMS current",
     d: "Drives power-stage conduction loss and heating. TLVR designs run higher phase RMS than buck for the same load because of the added Lc ripple.",
