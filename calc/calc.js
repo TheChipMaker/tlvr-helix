@@ -8,7 +8,7 @@
 
   var IDS = ["vin","vout","fsw","nph","itdc","k","lm","lc","rlc","rsec",
              "rroute","pcore","istep","tstep","dvac","rll","tresp","non",
-             "dramp","tdelay","cout"];
+             "dramp","tdelay","cout","esr","esl"];
 
   var $ = function (id) { return document.getElementById(id); };
   var num = function (id) { return parseFloat($(id).value); };
@@ -51,7 +51,9 @@
       nOn:    num("non"),
       dRamp:  num("dramp"),
       tDelay: num("tdelay") * 1e-9,
-      Cout:   num("cout")   * 1e-6     // uF -> F
+      Cout:   num("cout")   * 1e-6,    // uF -> F
+      esr:    num("esr")    * 1e-3,    // mohm -> ohm
+      esl:    num("esl")    * 1e-12    // pH -> H
     };
   }
 
@@ -73,7 +75,9 @@
     o.iPh   = EQ.iPhaseRipple(o.iMag, p.k, o.iLc);
     o.iOut  = EQ.iOutRipple({ k:p.k, N:p.N, D:o.D, fsw:p.fsw, iLc:o.iLc, iMag:o.iMag });
     o.iRms  = EQ.iRmsLc(o.iLc);
-    o.vRip  = EQ.vOutRipple({ iOut:o.iOut, N:p.N, fsw:p.fsw, Cout:p.Cout });
+    o.vRipC = EQ.vOutRipple({ iOut:o.iOut, N:p.N, fsw:p.fsw, Cout:p.Cout });
+    o.vRip  = EQ.vOutRippleFull({ dIout:o.iOut, Cout:p.Cout, N:p.N, fsw:p.fsw,
+                                  esr:p.esr, esl:p.esl });
 
     o.iPhDC  = EQ.iPhaseDC(p.iTdc, p.N);
     o.iPhPk  = EQ.iPhasePeak(o.iPhDC, o.iPh);
@@ -138,7 +142,8 @@
       row("iphrip",  "Total phase ripple",       fx(o.iPh, 2) + " A",   "IFX Eq. 12") +
       row("ioutrip", "Summed output ripple",     fx(o.iOut, 2) + " A",  "IFX Eq. 17") +
       row("irmslc",  "L_C RMS current",          fx(o.iRms, 2) + " A",  "TI Eq. 21") +
-      row("vrip",    "Output voltage ripple",    eng(o.vRip, "V", 2),   "TI Fig. 19, first order") +
+      row("vrip",    "Output voltage ripple",    eng(o.vRip, "V", 2),   "IFX Eq. 19 (C + ESR + ESL)") +
+      row("vripc",   "\u2514 capacitive term only", eng(o.vRipC, "V", 2), "dI / (8 x f_HF x C_OUT)") +
       row("iphpk",   "Per-phase peak current",   fx(o.iPhPk, 1) + " A", "I_DC + dI_ph / 2") +
       row("iphrms",  "Per-phase RMS current",    fx(o.iPhRms, 1) + " A","sqrt(I_DC^2 + dI^2/12)");
 
@@ -314,6 +319,19 @@
     themeBtn.textContent = mode === "dark" ? "Light" : "Dark";
     try { localStorage.setItem("tlvr-theme", mode); } catch (e) {}
   }
+    /* ---- result tabs ---- */
+  var tabs = document.querySelectorAll(".tab");
+  Array.prototype.forEach.call(tabs, function (t) {
+    t.addEventListener("click", function () {
+      Array.prototype.forEach.call(tabs, function (o) {
+        var panel = $(o.getAttribute("data-panel"));
+        var on = (o === t);
+        o.classList.toggle("on", on);
+        o.setAttribute("aria-selected", on ? "true" : "false");
+        if (panel) panel.hidden = !on;
+      });
+    });
+  });
   themeBtn.addEventListener("click", function () {
     var now = document.documentElement.getAttribute("data-theme");
     setTheme(now === "dark" ? "light" : "dark");

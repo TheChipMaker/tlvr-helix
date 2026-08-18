@@ -115,13 +115,32 @@ body{
 
 /* ---------- layout ---------- */
 main{
-  display:grid;
-  grid-template-columns:minmax(320px,1fr) minmax(360px,1.05fr);
+  display:flex;
+  flex-direction:column;
   gap:20px;
   padding:24px 28px 8px;
-  align-items:start;
   max-width:1400px; margin:0 auto;
 }
+.inputs{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px}
+
+/* ---------- result tabs ---------- */
+.tabs{display:flex; gap:2px; flex-wrap:wrap; border-bottom:1px solid var(--border)}
+.tab{
+  font-family:var(--font-mono); font-weight:500; font-size:11px;
+  letter-spacing:.12em; text-transform:uppercase;
+  color:var(--text-2); background:none; cursor:pointer;
+  border:1px solid transparent; border-bottom:none;
+  border-radius:var(--radius) var(--radius) 0 0;
+  padding:10px 16px; margin-bottom:-1px;
+}
+.tab:hover{color:var(--link)}
+.tab.on{
+  color:var(--link); background:var(--surface);
+  border-color:var(--border); border-bottom-color:var(--surface);
+}
+.tab:focus-visible{outline:2px solid var(--link); outline-offset:-2px}
+.panel{border-radius:0 var(--radius) var(--radius) var(--radius)}
+.panel[hidden]{display:none}
 .col{display:flex; flex-direction:column; gap:18px}
 
 fieldset{
@@ -319,7 +338,8 @@ footer{
 
 /* ---------- responsive ---------- */
 @media (max-width:860px){
-  main{grid-template-columns:1fr}
+  .inputs{grid-template-columns:1fr}
+  .tab{padding:9px 11px; letter-spacing:.06em}
 }
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important; animation:none !important}
