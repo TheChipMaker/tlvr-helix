@@ -20,7 +20,7 @@ EQ.nSimOnMax = (N, D) => Math.max(1, Math.ceil(N * D));
 // Nsim_on_min   [IFX Eq. 8]
 EQ.nSimOnMin = (N, D) => {
   const nMax = EQ.nSimOnMax(N, D);
-  return nMax === N * D ? nMax : nMax - 1;
+  return Math.abs(nMax - N * D) < 1e-9 ? nMax : Math.max(0, nMax - 1);
 };
 
 // D_HF = N*D - INT(N*D)   [IFX Eq. 9]  (overlap duty of the ripple frequency)
@@ -79,25 +79,37 @@ EQ.vOutRipple = ({ iOut, N, fsw, Cout }) =>
 
 /* --- transient ---------------------------------------------------------- */
 
-// L_trans = Lm*Lc / (k^2*N^2*Lm + N*Lc)   [IFX Eq. 29]
-EQ.lTrans = ({ Lm, Lc, k, N }) =>
-  (Lm * Lc) / (k * k * N * N * Lm + N * Lc);
+// L_trans (whole regulator) = Lm*Le / (k^2*N^2*Lm + N*Le)   [IFX Eq. 29]
+// Le = Lct when leakage is accounted for, else bare Lc.
+EQ.lTrans = ({ Lm, Lc, k, N, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+  return (Lm * Le) / (k * k * N * N * Lm + N * Le);
+};
+
+// Per-phase equivalent transient inductance   [REN]
+// L_eq_ph = Lct * Lm / (Lc + N*Lm)   — validated: 24.3 nH on the Renesas example
+EQ.lTransPhase = ({ Lm, Lc, k, N }) =>
+  (EQ.lct({ k, N, Lm, Lc }) * Lm) / (Lc + N * Lm);
 
 // Rising Isum slope, multiphase buck   [TI, Eq. 15/16 basis]
 EQ.slopeUpBuck = ({ nOn, N, vin, vout, Lm }) =>
   (nOn * (vin - vout)) / Lm - ((N - nOn) * vout) / Lm;
 
 // Rising Isum slope, TLVR   [TI Eq. 18]
-EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc }) =>
-  EQ.slopeUpBuck({ nOn, N, vin, vout, Lm }) +
-  (N * (nOn * vin - N * vout)) / Lc;
+EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc, k, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+  return EQ.slopeUpBuck({ nOn, N, vin, vout, Lm }) +
+         (N * (nOn * vin - N * vout)) / Le;
+};
 
 // Falling Isum slope, multiphase buck   [TI Eq. 19]
 EQ.slopeDownBuck = ({ N, vout, Lm }) => -(N * vout) / Lm;
 
 // Falling Isum slope, TLVR   [TI Eq. 20]
-EQ.slopeDownTlvr = ({ N, vout, Lm, Lc }) =>
-  EQ.slopeDownBuck({ N, vout, Lm }) - (N * (N * vout)) / Lc;
+EQ.slopeDownTlvr = ({ N, vout, Lm, Lc, k, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+  return EQ.slopeDownBuck({ N, vout, Lm }) - (N * (N * vout)) / Le;
+};
 
 // Cout required to hold dV during the ramp   [TI Eq. 1, rearranged]
 // dV = (1/2 * Istep^2 / Slope) / Cout  ->  Cout = 0.5*Istep^2/Slope/dV_total

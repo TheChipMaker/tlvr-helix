@@ -79,11 +79,12 @@
     o.iPhPk  = EQ.iPhasePeak(o.iPhDC, o.iPh);
     o.iPhRms = EQ.iPhaseRms(o.iPhDC, o.iPh);
 
-    o.lTrans   = EQ.lTrans({ Lm:p.Lm, Lc:p.Lc, k:p.k, N:p.N });
+    o.lTrans    = EQ.lTrans({ Lm:p.Lm, Lc:p.Lc, k:p.k, N:p.N });
+    o.lTransPh  = EQ.lTransPhase({ Lm:p.Lm, Lc:p.Lc, k:p.k, N:p.N });
     o.slUpBuck = EQ.slopeUpBuck({ nOn:p.nOn, N:p.N, vin:p.vin, vout:p.vout, Lm:p.Lm });
-    o.slUp     = EQ.slopeUpTlvr({ nOn:p.nOn, N:p.N, vin:p.vin, vout:p.vout, Lm:p.Lm, Lc:p.Lc });
+    o.slUp     = EQ.slopeUpTlvr({ nOn:p.nOn, N:p.N, vin:p.vin, vout:p.vout, Lm:p.Lm, Lc:p.Lc, k:p.k });
     o.slDnBuck = EQ.slopeDownBuck({ N:p.N, vout:p.vout, Lm:p.Lm });
-    o.slDn     = EQ.slopeDownTlvr({ N:p.N, vout:p.vout, Lm:p.Lm, Lc:p.Lc });
+    o.slDn     = EQ.slopeDownTlvr({ N:p.N, vout:p.vout, Lm:p.Lm, Lc:p.Lc, k:p.k });
 
     o.coutUp   = EQ.coutRequired({ iStep:p.iStep, slope:o.slUp,  dVac:p.dVac, rLL:p.rLL });
     o.coutDn   = EQ.coutRequired({ iStep:p.iStep, slope:o.slDn,  dVac:p.dVac, rLL:p.rLL });
@@ -148,7 +149,8 @@
     var lcOk   = p.Lc <= o.lcMax;
 
     $("r-trans").innerHTML =
-      row("ltrans",  "Effective transient L",   eng(o.lTrans, "H", 1),                "IFX Eq. 29") +
+      row("ltrans",  "Transient L (regulator)", eng(o.lTrans, "H", 1),                "IFX Eq. 29 on L_CT") +
+      row("ltransph","Transient L (per phase)", eng(o.lTransPh, "H", 1),              "REN, L_CT\u00B7L_M/(L_C+N\u00B7L_M)") +
       row("slopeup", "Rising I_SUM slope",      eng(o.slUp, "A/s", 2),                "TI Eq. 18",
           { ok: gainUp > 1, label: fx(gainUp, 2) + "x buck" }) +
       row("slopedn", "Falling I_SUM slope",     eng(o.slDn, "A/s", 2),                "TI Eq. 20",
