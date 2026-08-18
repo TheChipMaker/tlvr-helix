@@ -184,9 +184,13 @@
   };
 
   function initLive() {
+    if (!window.TLVRDetail) {
+      console.warn("TLVRLive: charts.js must load before calc.js — skipping live charts");
+      return;
+    }
     Object.keys(LIVE).forEach(function (key) {
       var cfg = LIVE[key], sel = $(cfg.sel);
-      if (!sel || !window.TLVRDetail) return;
+      if (!sel) return;
       cfg.terms.forEach(function (t) {
         if (!window.TLVRDetail.has(t)) {
           console.warn("TLVRLive: no chart registered for term '" + t + "'");
