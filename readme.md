@@ -139,7 +139,10 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
       Since the real secondary loop impedance is L_CT, both read optimistically
       high on achievable bandwidth. Left as published rather than silently
       deviating from the source — see §7.
-- [ ] Supply real C_OUT bulk ESR and ESL figures. The defaults (0.2 mΩ, 50 pH)
+- [ ] **Decide how module mode is integrated.** It currently duplicates five
+      inputs that already exist in design mode, so the two modes can silently
+      disagree about the same design. See §5. Preferred fix is to fold it in as
+      a fifth results tab reading the shared input set.
       are placeholders, and ESR dominates output voltage ripple by roughly 19x
       over the capacitive term at the reference operating point
 
@@ -207,7 +210,7 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 | `terms.js` | Glossary: short text for tooltips, extended text for detail panels |
 | `calc.js` | Unit conversion, live recompute, tooltips, presets, JSON save/load |
 | `charts.js` | Detail panel, SVG chart renderer, per-term chart registry |
-| `module.js` | Module mode: builds its own panel and spec-sheet output |
+| `module.js` | Module mode: builds its own panel and spec-sheet output. **Structurally parallel to the design path — see the note below** |
 
 ### Deliberate constraints — do not break these
 
@@ -222,6 +225,17 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 - **`.panel` belongs to the modal detail panel only.** Result tab fieldsets use
   `.tabpanel`. The modal rule carries `overflow:hidden` and `max-height:88vh`,
   which clips inline charts if the class is reused.
+- **One layout rule serves both modes.** `main, #module-mode` share a single
+  grid definition and a single 1100px breakpoint. A mode-specific override
+  placed later in the file wins on equal specificity and silently desyncs the
+  two — this happened once already. Do not reintroduce one.
+- **`#tip` is `position:fixed`.** Positioning therefore uses raw
+  `getBoundingClientRect()` values with no scroll offsets. Adding `scrollX` or
+  `scrollY` back will break it. The tooltip flips above its marker near the
+  viewport bottom and mirrors the `::before` hover bridge via a `.flip` class;
+  bridge and panel must stay on the same side or pointer travel to the
+  "Learn more" button crosses dead space and dismisses early.
+
 - **No invented numbers.** Every figure and claim traces to a numbered equation
   or a datasheet table. Where a quantity cannot be derived from the sources —
   core loss being the standing example, which needs Steinmetz coefficients none
@@ -245,6 +259,31 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
   `TLVRDetail.renderInto(term, container)`.
 - Inputs sit in a sticky left column; the results column scrolls independently
   with the tab bar pinned, so the chart stays visible while inputs are adjusted.
+
+### Module mode — known structural problem
+
+Module mode is a separate `<section>` swapped in by hiding `<main>` entirely. It
+predates the tab shell and has not been brought forward, so it has none of the
+above: no tabs, no live charts, no independent scroll. It is three flat
+fieldsets, which is what design mode looked like before the restructure.
+
+More seriously, it **duplicates inputs that already exist**. `m_lm`, `m_vin`,
+`m_fsw`, `m_k` and `m_rsec` shadow `lm`, `vin`, `fsw`, `k` and `rsec`. These are
+the same physical quantities, held twice, with no synchronisation. Changing L_M
+in one mode does not move the other, so the published module spec can disagree
+with the design it was derived from. This is a correctness risk, not a UI
+complaint. `module.js` also carries its own copy of `eng()` from `calc.js`.
+
+Only five inputs are genuinely module-specific: `m_stages`, `m_isat`,
+`m_irated`, `m_rpri`, `m_count`.
+
+**Intended fix, not yet done:** delete `#module-mode` and the mode button; add a
+"Module spec" results tab reading the shared `readInputs()`; move the five real
+module inputs into a "Module definition" fieldset in the shared input column;
+mark existing labels as fixed-at-manufacture or integrator-chosen rather than
+duplicating them. Phase count becomes derived and read-only:
+`nph = m_stages x m_count`, which is also physically honest — chaining 2-phase
+modules cannot yield an odd phase count.
 - Presets: reference design, TI Table 2, Renesas worked example.
 - Save and reload the input set as JSON.
 - Light and dark themes, defaulting to the operating system preference.
@@ -454,4 +493,8 @@ alarm or blame. This governs tooltip and detail-panel text.
 - New chart terms must be registered in the `CHARTS` object in `charts.js` and
   referenced by the same key in the `LIVE` map in `calc.js`. A key present in
   one and absent from the other logs a console warning.
+- **A quantity lives in exactly one input.** If both modes need it, they read
+  the same element. Do not add a mode-prefixed duplicate of an existing input.
+- Layout belongs to shared selectors. Prefer adding a mode to an existing rule
+  over writing a rule for that mode.
 - Results are estimates. Confirm against simulation before committing a design.
