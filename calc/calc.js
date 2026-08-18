@@ -251,14 +251,17 @@
   }
 
   function update() {
-    var p = readInputs();
+    var p = applyDualPhase(readInputs());
     render(p, solve(p));
     drawLive();
   }
 
   window.TLVRLive = { draw: drawLive, init: initLive };
 
-  window.TLVR = { readInputs: readInputs, solve: solve };
+  window.TLVR = {
+    readInputs: function () { return applyDualPhase(readInputs()); },
+    solve: solve
+  };
 
   /* ---- tooltips ----
        The tooltip stays open while the pointer is over it, so the "Learn more"
