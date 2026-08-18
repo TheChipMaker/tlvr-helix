@@ -141,6 +141,9 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
       deviating from the source — see §7.
 - [x] ~~Decide how module mode is integrated.~~ Done — folded into a fifth
       results tab on the shared input set; `module.js` deleted. See §5.
+- [ ] **Confirm the per-phase transient inductance for M > 1 against
+      simulation.** `lTransPhase` is a Renesas form with no dual-phase
+      counterpart in any source; the M = 2 value is an extrapolation.
 - [ ] **Confirm the dual-phase L_CT treatment against simulation.** Neither
       Infineon nor Renesas publishes L_CT for dual-phase mode, so the
       physical-secondary-count form is a documented deviation, not a sourced
@@ -167,12 +170,23 @@ will recur: **any new consumer of the input set must be checked against
 - [x] ~~Presets were broken by derived `nph`.~~ They wrote a read-only field and
       left the module definition untouched, so the Renesas preset silently
       loaded a 2-phase design. Presets now set `m_stages`/`m_pwm`/`m_count`.
+- [x] ~~Eleven terms rendered a `?` with no glossary entry.~~ All eleven added:
+      `esr`, `esl`, `vripc`, `ltransph` (pre-existing gaps) and `m_pwm`,
+      `stagerip`, `m_istage`, `m_budget`, `m_vsec`, `m_imon`, `m_ppri`.
+      Note the schema is `t` / `d` / `long` / `src` — an entry using any other
+      key for the extended text parses fine and silently renders an empty
+      detail panel.
+- [x] ~~Magnetics charts swept in M-scaled units.~~ The L_M and L_C sweeps now
+      run on as-typed values and divide by M inside the callback, so axis,
+      marker and curve agree. The `lc` chart's slew limit is multiplied by M
+      to match the raw axis.
 - [ ] The `nph` chart sweeps PWM count against M-scaled magnetics, which is not
-      a meaningful comparison. It should sweep stages-per-PWM instead.
-- [ ] Eleven terms render a `?` with no glossary entry, so the marker appears
-      and does nothing: `esr`, `esl`, `vripc`, `ltransph` (pre-existing) and
-      `m_pwm`, `stagerip`, `m_istage`, `m_budget`, `m_vsec`, `m_imon`,
-      `m_ppri` (added in Step 3).
+      a meaningful comparison. It should sweep **stages per PWM** instead,
+      since that is now the live design question.
+
+All chart/panel divergence is resolved. `charts.js` threads `M` through all
+15 equation call sites; `grep -c "M: p.M" calc/charts.js` should return 15.
+
 ### The t_RESP placeholder — read this before trusting transient results
 
 The preset ships with `t_RESP = 1 µs`, which is **not grounded in any source**.
@@ -449,10 +463,29 @@ counterpart to defer to. Revisit as a group, not piecemeal.
 | --------------------- | ------- | --------------- |
 | Per-phase transient L | 24.3 nH | 24.38 nH        |
 
-**M = 1 regression, run after the dual-phase work.** The Renesas example
-(8-phase, L_M 200 nH, L_C 150 nH, k 0.98) still returns L_CT 213.4 nH,
-dI_Lc 1.84 A, dI_out 16.4 A — unchanged. Any future edit to the dual-phase
-path must reproduce these, since M = 1 is the identity case.
+**Full preset regression, run after the chart fixes.** Driven through
+`EQ.dualPhase` exactly as `applyDualPhase` does, so this exercises the shipped
+path rather than the equations in isolation.
+
+| Preset | M | N | L_CT | dI_Lc | dI_out | L_trans/ph | I_sat needed |
+|---|---|---|---|---|---|---|---|
+| Renesas | 1 | 8 | 213.4 nH | 1.84 A | 16.4 A | 24.38 nH | 67.3 A |
+| Helix | 2 | 2 | 101.9 nH | 10.52 A | 35.2 A | 31.84 nH | 69.1 A |
+| TI Table 2 | 1 | 4 | 203.8 nH | 4.70 A | 25.0 A | 39.18 nH | 87.7 A |
+
+The Renesas row is the validation anchor and reproduces §7 exactly. **Any
+future edit to the dual-phase path must reproduce this whole table**, since
+M = 1 is the identity case and the Helix row is the only coverage of M > 1.
+
+Two things about this table that are not defects:
+
+- **The TI preset fails its saturation check** (87.7 A needed against the
+  assumed 80 A transformer). That preset is TI's 325 A design on four phases,
+  which is more current than the provisional Helix magnetics support. It is
+  a reference operating point, not a Helix configuration.
+- **`L_trans/ph` for the Helix row is the least trustworthy number here.** The
+  Renesas per-phase form was never published for dual-phase mode, so the M > 1
+  value is an extrapolation. Confirm against simulation before relying on it.
 
 ### Other correctness fixes from the same review
 
