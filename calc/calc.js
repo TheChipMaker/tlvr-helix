@@ -130,10 +130,9 @@
       row("fhf",   "L_C excitation freq",       eng(o.fHF, "Hz", 2),            "f_HF = N x f_SW") +
       row("iphdc", "Per-phase DC current",      fx(o.iPhDC, 1) + " A",          "I_TDC / N");
 
-    var ripplePct = (o.iMag / o.iPhDC) * 100;
+    var ripplePct = (o.iPh / o.iPhDC) * 100;
     $("r-ripple").innerHTML =
-      row("imagrip", "Magnetizing ripple",       fx(o.iMag, 2) + " A",  "IFX Eq. 13",
-          { ok: ripplePct >= 20 && ripplePct <= 50, label: ripplePct.toFixed(0) + "% of DC" }) +
+      row("imagrip", "Magnetizing ripple",       fx(o.iMag, 2) + " A",  "IFX Eq. 13") +
       row("lct",     "Effective loop L (L_CT)",  eng(o.Lct, "H", 1),    "REN, (1-k^2)xL_MxN + L_C") +
       row("ilcrip",  "L_C ripple",               fx(o.iLc, 2) + " A",   "IFX Eq. 11 on L_CT") +
       row("iphrip",  "Total phase ripple",       fx(o.iPh, 2) + " A",   "IFX Eq. 12") +
