@@ -111,6 +111,16 @@
     o.iPhPk = EQ.iPhasePeak(o.iPhDC, o.iPh);
     o.iPhRms = EQ.iPhaseRms(o.iPhDC, o.iPh);
 
+    // per-transformer figures — the ones component ratings are judged against
+    o.st = EQ.stageSplit({ iPhDC: o.iPhDC, iMagPair: o.iMag, iLc: o.iLc, k: p.k, M: p.M });
+    o.stPk = EQ.iPhasePeak(o.st.iDC, o.st.iPh);
+    o.stRms = EQ.iPhaseRms(o.st.iDC, o.st.iPh);
+    o.iSatNeed = EQ.iSatTlvr({ iOutMax: p.iTdc, N: p.nPhys, dIph: o.st.iPh });
+    o.budget = EQ.rippleBudget({ iSat: p.mIsat, iRated: p.mIrated, iMagStage: o.st.iMag, k: p.k });
+    o.vSecPeak = EQ.vLcMax({ nOn: p.nPhys, vin: p.vin, N: p.nPhys, vout: p.vout });
+    o.rImon = EQ.imonResistor({ M: p.M });
+    o.pPri = o.stRms * o.stRms * p.rPri;
+
     o.lTrans = EQ.lTrans({ Lm: p.Lm, Lc: p.Lc, k: p.k, N: p.N, LmLeak: p.LmLeak });
     o.lTransPh = EQ.lTransPhase({ Lm: p.Lm, Lc: p.Lc, k: p.k, N: p.N, LmLeak: p.LmLeak });
     o.slUpBuck = EQ.slopeUpBuck({ nOn: p.nOn, N: p.N, vin: p.vin, vout: p.vout, Lm: p.Lm });
@@ -177,7 +187,12 @@
       row("vrip", "Output voltage ripple", eng(o.vRip, "V", 2), "IFX Eq. 19 (C + ESR + ESL)") +
       row("vripc", "\u2514 capacitive term only", eng(o.vRipC, "V", 2), "dI / (8 x f_HF x C_OUT)") +
       row("iphpk", "Per-phase peak current", fx(o.iPhPk, 1) + " A", "I_DC + dI_ph / 2") +
-      row("iphrms", "Per-phase RMS current", fx(o.iPhRms, 1) + " A", "sqrt(I_DC^2 + dI^2/12)");
+      row("iphrms", "Per-phase RMS current", fx(o.iPhRms, 1) + " A", "sqrt(I_DC^2 + dI^2/12)") +
+      (p.M > 1
+        ? row("stagerip", "\u2514 per stage (M = " + p.M + ")",
+              fx(o.st.iPh, 2) + " A ripple, " + fx(o.stPk, 1) + " A peak",
+              "pair figures divided by M; dI_Lc undivided")
+        : "");
 
     var gainUp = o.slUp / o.slUpBuck;
     var gainDn = o.slDn / o.slDnBuck;
@@ -205,6 +220,28 @@
         { ok: o.vLc <= p.vin, label: o.vLc > p.vin ? "exceeds V_IN" : "under V_IN" }) +
       row("taulc", "L_C loop time constant", eng(o.tau, "s", 2), "IFX Eq. 57 (= TI Eq. 23)") +
       row("plc", "L_C loop power loss", fx(o.pLc, 2) + " W", "TI Eq. 26");
+
+    var satOk = o.iSatNeed <= p.mIsat;
+    var budgetOk = o.iLc <= o.budget.dILcAllowed;
+    $("r-module").innerHTML =
+      row("m_stages", "Stages / PWM / modules",
+          p.nPhys + " stages, " + p.N + " PWM, M = " + p.M,
+          "M = stages / PWM channels") +
+      row("m_istage", "Per-stage DC current", fx(o.st.iDC, 1) + " A",
+          "I_TDC / stage count") +
+      row("m_isat", "Transformer I_sat required", fx(o.iSatNeed, 1) + " A",
+          "IFX Eq. 18 on per-stage ripple",
+          { ok: satOk, label: satOk ? fx(p.mIsat - o.iSatNeed, 1) + " A margin" : "saturates" }) +
+      row("m_budget", "Loop ripple budget \u0394I_Lc", fx(o.budget.dILcAllowed, 1) + " A",
+          "IFX Eq. 18 rearranged \u2014 headline module spec",
+          { ok: budgetOk, label: budgetOk ? "actual " + fx(o.iLc, 1) + " A" : "over budget" }) +
+      row("m_vsec", "Secondary interconnect voltage", fx(o.vSecPeak, 0) + " V",
+          "TI Eq. 24, all stages on \u2014 worst case",
+          { ok: o.vSecPeak <= 100, label: o.vSecPeak > 100 ? "check rating" : "under 100 V" }) +
+      row("m_imon", "IMON summing resistor", fx(o.rImon, 0) + " \u2126",
+          "1 k\u2126 / M \u2014 TDA22594A sources 5 \u00B5A/A") +
+      row("m_ppri", "Primary loss per stage", fx(o.pPri, 2) + " W",
+          "I_rms\u00B2 \u00D7 R_pri");
   }
 
   /* ---- live charts: one plot per tab, sweep variable chosen by the select ---- */
@@ -212,7 +249,8 @@
     op: { terms: ["vout", "vin", "nph", "fsw"], sel: "pick-op", plot: "plot-op" },
     ripple: { terms: ["lc", "lm", "k", "fsw", "nph"], sel: "pick-ripple", plot: "plot-ripple" },
     trans: { terms: ["coutgov", "lc", "lm", "k"], sel: "pick-trans", plot: "plot-trans" },
-    limits: { terms: ["itdc", "rlc", "rsec", "rroute"], sel: "pick-limits", plot: "plot-limits" }
+    limits: { terms: ["itdc", "rlc", "rsec", "rroute"], sel: "pick-limits", plot: "plot-limits" },
+    module: { terms: ["lc", "lm", "itdc"], sel: "pick-module", plot: "plot-module" }
   };
 
   function initLive() {

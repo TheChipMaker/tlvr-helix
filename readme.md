@@ -139,10 +139,15 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
       Since the real secondary loop impedance is L_CT, both read optimistically
       high on achievable bandwidth. Left as published rather than silently
       deviating from the source — see §7.
-- [ ] **Decide how module mode is integrated.** It currently duplicates five
-      inputs that already exist in design mode, so the two modes can silently
-      disagree about the same design. See §5. Preferred fix is to fold it in as
-      a fifth results tab reading the shared input set.
+- [x] ~~Decide how module mode is integrated.~~ Done — folded into a fifth
+      results tab on the shared input set; `module.js` deleted. See §5.
+- [ ] **Confirm the dual-phase L_CT treatment against simulation.** Neither
+      Infineon nor Renesas publishes L_CT for dual-phase mode, so the
+      physical-secondary-count form is a documented deviation, not a sourced
+      equation. It is the one place the calculator goes beyond its sources.
+- [ ] Re-examine whether 2 PWM is the right call. The cell pays 2.3x loop
+      ripple and 1.5x output ripple against the same four chips on four PWMs.
+      That cost lands on L_C sizing and C_OUT.
 - [ ] Supply real C_OUT bulk ESR and ESL figures. The defaults (0.2 mΩ, 50 pH)
       are placeholders, and ESR dominates output voltage ripple by roughly 19x
       over the capacitive term at the reference operating point
@@ -261,30 +266,64 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 - Inputs sit in a sticky left column; the results column scrolls independently
   with the tab bar pinned, so the chart stays visible while inputs are adjusted.
 
-### Module mode — known structural problem
+### Module mode — resolved, and what replaced it
 
-Module mode is a separate `<section>` swapped in by hiding `<main>` entirely. It
-predates the tab shell and has not been brought forward, so it has none of the
-above: no tabs, no live charts, no independent scroll. It is three flat
-fieldsets, which is what design mode looked like before the restructure.
+`module.js` and the `#module-mode` section are gone. The duplicated inputs
+(`m_lm`, `m_vin`, `m_fsw`, `m_k`, `m_rsec`) were deleted rather than ported, so
+every quantity now lives in exactly one input. Module specification is a fifth
+results tab reading the shared `readInputs()`, and the genuinely
+module-specific inputs sit in a "Module definition" fieldset in the shared
+input column.
 
-More seriously, it **duplicates inputs that already exist**. `m_lm`, `m_vin`,
-`m_fsw`, `m_k` and `m_rsec` shadow `lm`, `vin`, `fsw`, `k` and `rsec`. These are
-the same physical quantities, held twice, with no synchronisation. Changing L_M
-in one mode does not move the other, so the published module spec can disagree
-with the design it was derived from. This is a correctness risk, not a UI
-complaint. `module.js` also carries its own copy of `eng()` from `calc.js`.
+**Phase count is now derived and read-only.** The `nph` field displays
+`m_pwm x m_count` and is written by `applyDualPhase`, never typed. Editing it
+has no effect.
 
-Only five inputs are genuinely module-specific: `m_stages`, `m_isat`,
-`m_irated`, `m_rpri`, `m_count`.
+### Dual-phase mode — the Helix cell
 
-**Intended fix, not yet done:** delete `#module-mode` and the mode button; add a
-"Module spec" results tab reading the shared `readInputs()`; move the five real
-module inputs into a "Module definition" fieldset in the shared input column;
-mark existing labels as fixed-at-manufacture or integrator-chosen rather than
-duplicating them. Phase count becomes derived and read-only:
-`nph = m_stages x m_count`, which is also physically honest — chaining 2-phase
-modules cannot yield an odd phase count.
+The module is **four TDA22594A stages driven by two PWM channels**, so two
+stages share each PWM in Infineon's dual-phase mode. `M = stages / PWM`.
+
+`applyDualPhase()` in `calc.js` runs between `readInputs()` and `solve()`,
+scaling `L_M -> L_M/M`, `L_C -> L_C/M` and collapsing `N` to the PWM count.
+Everything downstream is untouched. It is called from `update()` **and** from
+the `window.TLVR.readInputs` export, so the charts and the results panel cannot
+diverge.
+
+**The decision, stated plainly:** slew gain is `(L_M/L_C) x N`, and since both
+inductances divide by M, **M cancels**. TLVR transient benefit tracks PWM
+channel count, not chip count. Four stages on two PWMs performs identically to
+two stages on two PWMs, at twice the current. The cell is a high-current
+2-phase block, not a 4-phase one. Four stages on four PWMs would be
+meaningfully better on transient — this is a deliberate trade of transient
+performance for current density and controller channel economy.
+
+Measured cost at the reference point:
+
+| Quantity    | 4 stages, 2 PWM | 4 stages, 4 PWM |
+| ----------- | --------------- | --------------- |
+| Effective N | 2               | 4               |
+| L_CT        | 101.9 nH        | 203.8 nH        |
+| f_HF        | 1.20 MHz        | 2.40 MHz        |
+| dI_Lc       | 10.52 A         | 4.51 A          |
+| dI_out      | 35.2 A          | 23.9 A          |
+
+#### Two subtleties that will bite anyone editing this
+
+**Leakage does not scale with M.** `L_CT` counts *physical* series secondaries,
+and four stages put four in the loop however many PWMs drive them. But
+`(1-k^2) x L_M x N_phys / M` is identically `(1-k^2) x L_M x N_pwm`, so `EQ.lct`
+takes one optional `LmLeak` argument carrying the **unscaled** per-transformer
+L_M. Omit it and the function is bit-identical to the validated single-stage
+form. Do not "simplify" this by passing the scaled L_M.
+
+**Ripple and current come out as PWM-pair quantities.** Under `L_M -> L_M/M`,
+`dI_mag` and `I_ph_DC` are the pair total, not per transformer. Saturation,
+peak current and FET RMS are per-device checks and must use `EQ.stageSplit`,
+which divides both by M. **`dI_Lc` is not divided** — the loop current couples
+into every transformer at full value through k. Getting this wrong reports
+133 A of required saturation where the true figure is 69.1 A, i.e. a false
+failure against an 80 A part.
 - Presets: reference design, TI Table 2, Renesas worked example.
 - Save and reload the input set as JSON.
 - Light and dark themes, defaulting to the operating system preference.
@@ -380,6 +419,11 @@ counterpart to defer to. Revisit as a group, not piecemeal.
 | Quantity              | Renesas | This calculator |
 | --------------------- | ------- | --------------- |
 | Per-phase transient L | 24.3 nH | 24.38 nH        |
+
+**M = 1 regression, run after the dual-phase work.** The Renesas example
+(8-phase, L_M 200 nH, L_C 150 nH, k 0.98) still returns L_CT 213.4 nH,
+dI_Lc 1.84 A, dI_out 16.4 A — unchanged. Any future edit to the dual-phase
+path must reproduce these, since M = 1 is the identity case.
 
 ### Other correctness fixes from the same review
 
@@ -494,8 +538,12 @@ alarm or blame. This governs tooltip and detail-panel text.
 - New chart terms must be registered in the `CHARTS` object in `charts.js` and
   referenced by the same key in the `LIVE` map in `calc.js`. A key present in
   one and absent from the other logs a console warning.
-- **A quantity lives in exactly one input.** If both modes need it, they read
-  the same element. Do not add a mode-prefixed duplicate of an existing input.
+- **A quantity lives in exactly one input.** Do not add a duplicate of an
+  existing input. Derived quantities are rendered read-only, never typed.
+- **All scaling happens in `applyDualPhase`, once.** Equation functions receive
+  already-scaled values and must not divide by M themselves. If a new consumer
+  of the input set appears, route it through `window.TLVR.readInputs`, not the
+  private `readInputs`.
 - Layout belongs to shared selectors. Prefer adding a mode to an existing rule
   over writing a rule for that mode.
 - Results are estimates. Confirm against simulation before committing a design.

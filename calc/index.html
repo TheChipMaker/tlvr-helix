@@ -133,6 +133,7 @@
         <button type="button" role="tab" class="tab" data-panel="p-trans" aria-selected="false">Transient</button>
         <button type="button" role="tab" class="tab" data-panel="p-limits" aria-selected="false">Component
           limits</button>
+        <button type="button" role="tab" class="tab" data-panel="p-module" aria-selected="false">Module spec</button>
       </div>
 
       <fieldset id="p-op" class="tabpanel">
@@ -157,6 +158,12 @@
         <div class="rows" id="r-limits"></div>
         <div class="live"><select class="pick" id="pick-limits"></select>
           <div class="plot" id="plot-limits"></div>
+        </div>
+      </fieldset>
+      <fieldset id="p-module" class="tabpanel" hidden>
+        <div class="rows" id="r-module"></div>
+        <div class="live"><select class="pick" id="pick-module"></select>
+          <div class="plot" id="plot-module"></div>
         </div>
       </fieldset>
 

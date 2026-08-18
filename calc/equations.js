@@ -49,6 +49,34 @@ EQ.dualPhase = ({ Lm, Lc, nStages, M }) => ({
   LmLeak: Lm
 });
 
+// De-lump PWM-pair quantities back to per-transformer figures.
+// Under Infineon's L_M -> L_M/M, magnetizing ripple and DC current come out
+// as the PAIR total. Saturation, peak and FET RMS are per-device checks and
+// need the stage figures. dI_Lc is NOT divided: the loop current couples into
+// every transformer at full value through k.
+// M = 1 returns the inputs unchanged.
+EQ.stageSplit = ({ iPhDC, iMagPair, iLc, k, M }) => {
+  const iMag = iMagPair / M;
+  return {
+    iDC:  iPhDC / M,
+    iMag: iMag,
+    iPh:  iMag + k * iLc
+  };
+};
+
+// Module ripple budget. [IFX Eq. 18 rearranged]
+//   I_sat >= I_rated + dI_ph/2  ->  dI_ph_allowed = 2*(I_sat - I_rated)
+//   dI_ph = dI_mag + k*dI_Lc    ->  dI_Lc_allowed = (dI_ph_allowed - dI_mag)/k
+// Both on PER-STAGE ripple, since I_sat is a per-transformer rating.
+EQ.rippleBudget = ({ iSat, iRated, iMagStage, k }) => {
+  const dIph = 2 * (iSat - iRated);
+  return { dIphAllowed: dIph, dILcAllowed: (dIph - iMagStage) / k };
+};
+
+// IMON summing resistor. TDA22594A sources 5 uA/A; M stages on one PWM sum
+// into one node, so the resistor scales down to hold the controller's V/A.
+EQ.imonResistor = ({ rNominal = 1000, M }) => rNominal / M;
+
 /* --- steady-state ripple ------------------------------------------------ */
 
 // Effective compensating-loop inductance including winding leakage.
