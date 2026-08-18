@@ -32,6 +32,23 @@ EQ.tOverlap = (N, D, fsw) => (1 / fsw) * (D - Math.trunc(N * D) / N);
 // Lc loop switches at N * fsw (no pulse overlap)   [TI, IFX]
 EQ.fHF = (N, fsw) => N * fsw;
 
+/* --- dual-phase mode (phase multiplication) ----------------------------- */
+
+// M power stages share one PWM output. Infineon: treat as one phase carrying
+// M x the current, with L_M and L_C both divided by M. Phase count collapses
+// to the PWM channel count. Returns the scaled parameter set; LmLeak carries
+// the raw per-transformer L_M forward for the leakage term.
+// NOTE: (Lm/M)/(Lc/M) = Lm/Lc, so slew and bandwidth gain track PWM COUNT,
+// not stage count. M buys current density, not transient performance.
+EQ.dualPhase = ({ Lm, Lc, nStages, M }) => ({
+  M: M,
+  nPhys: nStages,
+  N: nStages / M,
+  Lm: Lm / M,
+  Lc: Lc / M,
+  LmLeak: Lm
+});
+
 /* --- steady-state ripple ------------------------------------------------ */
 
 // Effective compensating-loop inductance including winding leakage.
@@ -39,15 +56,20 @@ EQ.fHF = (N, fsw) => N * fsw;
 // The N series secondaries each contribute leakage (1-k^2)*Lm, which adds to Lc.
 // Validated: applying Lct reproduces the Renesas worked example (dI_Lc = 1.88 A,
 // summed ripple = 15.8 A) where bare Lc over-predicts both by ~42%.
-EQ.lct = ({ k, N, Lm, Lc }) => (1 - k * k) * Lm * N + Lc;
+// LmLeak is the UNSCALED per-transformer L_M. In dual-phase mode Lm arrives
+// pre-divided by M (Infineon) but leakage counts physical secondaries, and
+// (1-k^2)*Lm*N_phys/M is identically (1-k^2)*Lm*N_pwm — so pass raw Lm here.
+// Omit LmLeak (M=1) and this is bit-identical to the validated single-stage form.
+EQ.lct = ({ k, N, Lm, Lc, LmLeak }) =>
+  (1 - k * k) * (LmLeak === undefined ? Lm : LmLeak) * N + Lc;
 
 // dI_Lc_pkpk = k*(NsimOnMax*Vin - N*Vout) * D_HF / (Lct * f_HF)   [IFX Eq. 11 + REN Lct]
 // Set leakage=false to use bare Lc (Infineon form) instead.
-EQ.iLcRipple = ({ k, N, D, vin, vout, Lc, Lm, fsw, leakage = true }) => {
+EQ.iLcRipple = ({ k, N, D, vin, vout, Lc, Lm, LmLeak, fsw, leakage = true }) => {
   const nMax = EQ.nSimOnMax(N, D);
   const dhf = EQ.dHF(N, D);
   const fhf = EQ.fHF(N, fsw);
-  const Leff = leakage && Lm ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+  const Leff = leakage && Lm ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
   return (k * (nMax * vin - N * vout) * dhf) / (Leff * fhf);
 };
 
@@ -81,33 +103,33 @@ EQ.vOutRipple = ({ iOut, N, fsw, Cout }) =>
 
 // L_trans (whole regulator) = Lm*Le / (k^2*N^2*Lm + N*Le)   [IFX Eq. 29]
 // Le = Lct when leakage is accounted for, else bare Lc.
-EQ.lTrans = ({ Lm, Lc, k, N, leakage = true }) => {
-  const Le = leakage ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+EQ.lTrans = ({ Lm, Lc, k, N, LmLeak, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
   return (Lm * Le) / (k * k * N * N * Lm + N * Le);
 };
 
 // Per-phase equivalent transient inductance   [REN]
 // L_eq_ph = Lct * Lm / (Lc + N*Lm)   — validated: 24.3 nH on the Renesas example
-EQ.lTransPhase = ({ Lm, Lc, k, N }) =>
-  (EQ.lct({ k, N, Lm, Lc }) * Lm) / (Lc + N * Lm);
+EQ.lTransPhase = ({ Lm, Lc, k, N, LmLeak }) =>
+  (EQ.lct({ k, N, Lm, Lc, LmLeak }) * Lm) / (Lc + N * Lm);
 
 // Rising Isum slope, multiphase buck   [TI, Eq. 15/16 basis]
 EQ.slopeUpBuck = ({ nOn, N, vin, vout, Lm }) =>
   (nOn * (vin - vout)) / Lm - ((N - nOn) * vout) / Lm;
 
 // Rising Isum slope, TLVR   [TI Eq. 18]
-EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc, k, leakage = true }) => {
-  const Le = leakage ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc, k, LmLeak, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
   return EQ.slopeUpBuck({ nOn, N, vin, vout, Lm }) +
-         (N * (nOn * vin - N * vout)) / Le;
+    (N * (nOn * vin - N * vout)) / Le;
 };
 
 // Falling Isum slope, multiphase buck   [TI Eq. 19]
 EQ.slopeDownBuck = ({ N, vout, Lm }) => -(N * vout) / Lm;
 
 // Falling Isum slope, TLVR   [TI Eq. 20]
-EQ.slopeDownTlvr = ({ N, vout, Lm, Lc, k, leakage = true }) => {
-  const Le = leakage ? EQ.lct({ k, N, Lm, Lc }) : Lc;
+EQ.slopeDownTlvr = ({ N, vout, Lm, Lc, k, LmLeak, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
   return EQ.slopeDownBuck({ N, vout, Lm }) - (N * (N * vout)) / Le;
 };
 

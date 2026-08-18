@@ -21,14 +21,14 @@ PWM controller, compensating inductor L_C and output capacitance.
 
 This split governs everything:
 
-| Fixed in the module | Chosen by the integrator |
-|---|---|
-| Magnetizing inductance L_M | Phase count (number of modules) |
-| Coupling coefficient k | Compensating inductance L_C |
-| Transformer saturation current | Output capacitance C_OUT |
-| Primary and secondary winding DCR | Controller and control scheme |
-| Rated current per phase | Output voltage and transient targets |
-| Phases per module | Switching frequency within the supported range |
+| Fixed in the module               | Chosen by the integrator                       |
+| --------------------------------- | ---------------------------------------------- |
+| Magnetizing inductance L_M        | Phase count (number of modules)                |
+| Coupling coefficient k            | Compensating inductance L_C                    |
+| Transformer saturation current    | Output capacitance C_OUT                       |
+| Primary and secondary winding DCR | Controller and control scheme                  |
+| Rated current per phase           | Output voltage and transient targets           |
+| Phases per module                 | Switching frequency within the supported range |
 
 The calculator therefore has **two modes**, and it is important not to confuse
 them:
@@ -71,11 +71,11 @@ Worst-case secondary loop voltage is `N_ON x V_IN - N x V_OUT`, which grows with
 phase count. At 12 V input:
 
 | Phases | Peak secondary voltage |
-|---|---|
-| 4 | 45 V |
-| 8 | 90 V |
-| 12 | 135 V |
-| 16 | 180 V |
+| ------ | ---------------------- |
+| 4      | 45 V                   |
+| 8      | 90 V                   |
+| 12     | 135 V                  |
+| 16     | 180 V                  |
 
 TI's own layout figure labels the L_C pad as high voltage, 50 V or more. **The
 inter-module interconnect must be rated for the largest system the module is
@@ -85,27 +85,27 @@ sold to support.** This is invisible from single-module analysis.
 
 ## 2. Module baseline (provisional)
 
-| Parameter | Value | Status |
-|---|---|---|
-| Phases per module | 2 | fixed |
-| Power stage | Infineon TDA22594A | fixed |
-| L_M per transformer | 100 nH | **provisional** |
-| Coupling coefficient k | 0.98 | **provisional** |
-| Transformer I_sat | 80 A | **unconfirmed** |
-| Rated current per phase | 60 A | **unconfirmed** |
-| Primary DCR | 0.18 mΩ | target, per Renesas guidance of <0.2 mΩ |
-| Secondary DCR | 0.3 mΩ | **provisional** |
-| Target rail range | not decided | **open** |
+| Parameter               | Value              | Status                                  |
+| ----------------------- | ------------------ | --------------------------------------- |
+| Phases per module       | 2                  | fixed                                   |
+| Power stage             | Infineon TDA22594A | fixed                                   |
+| L_M per transformer     | 100 nH             | **provisional**                         |
+| Coupling coefficient k  | 0.98               | **provisional**                         |
+| Transformer I_sat       | 80 A               | **unconfirmed**                         |
+| Rated current per phase | 60 A               | **unconfirmed**                         |
+| Primary DCR             | 0.18 mΩ            | target, per Renesas guidance of <0.2 mΩ |
+| Secondary DCR           | 0.3 mΩ             | **provisional**                         |
+| Target rail range       | not decided        | **open**                                |
 
 ### Reference system for design mode
 
-| Parameter | Value |
-|---|---|
-| Input voltage | 12 V nominal (part range 4.25–16 V) |
-| Output voltage | 0.75 V |
-| Phase count | 4 (2 modules) |
-| Switching frequency | 600 kHz, provisional |
-| L_M / L_C | 150 nH / 180 nH, provisional |
+| Parameter           | Value                               |
+| ------------------- | ----------------------------------- |
+| Input voltage       | 12 V nominal (part range 4.25–16 V) |
+| Output voltage      | 0.75 V                              |
+| Phase count         | 4 (2 modules)                       |
+| Switching frequency | 600 kHz, provisional                |
+| L_M / L_C           | 150 nH / 180 nH, provisional        |
 
 600 kHz was chosen because L_C is excited at N x f_SW. At four phases that is
 2.4 MHz; at 1 MHz per phase it would be 4 MHz, where ferrite core loss climbs
@@ -203,15 +203,15 @@ and organization UUIDs.
 Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 `file://` with no server and no build step.
 
-| File | Contents |
-|---|---|
-| `index.html` | Page structure, design-mode inputs, result tab bar |
-| `style.css` | Styling only, both light and dark themes |
-| `equations.js` | **All design maths.** Every function annotated with its source document and equation number |
-| `terms.js` | Glossary: short text for tooltips, extended text for detail panels |
-| `calc.js` | Unit conversion, live recompute, tooltips, presets, JSON save/load |
-| `charts.js` | Detail panel, SVG chart renderer, per-term chart registry |
-| `module.js` | Module mode: builds its own panel and spec-sheet output. **Structurally parallel to the design path — see the note below** |
+| File           | Contents                                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `index.html`   | Page structure, design-mode inputs, result tab bar                                                                         |
+| `style.css`    | Styling only, both light and dark themes                                                                                   |
+| `equations.js` | **All design maths.** Every function annotated with its source document and equation number                                |
+| `terms.js`     | Glossary: short text for tooltips, extended text for detail panels                                                         |
+| `calc.js`      | Unit conversion, live recompute, tooltips, presets, JSON save/load                                                         |
+| `charts.js`    | Detail panel, SVG chart renderer, per-term chart registry                                                                  |
+| `module.js`    | Module mode: builds its own panel and spec-sheet output. **Structurally parallel to the design path — see the note below** |
 
 ### Deliberate constraints — do not break these
 
@@ -303,26 +303,26 @@ modules cannot yield an odd phase count.
 3. **TI** — *Introduction to the Trans-Inductor Voltage Regulator (TLVR)*,
    Rev. A. Used where the other two have no equivalent.
 
-| Result | Source |
-|---|---|
-| Duty, overlap counts, D_HF, t_overlap | IFX Eq. 7–10 |
-| L_C / phase / output ripple | IFX Eq. 11–17 |
-| Transformer saturation requirement | IFX Eq. 18 |
-| Output ripple with ESR and ESL | IFX Eq. 19 |
-| Effective transient inductance, whole regulator | IFX Eq. 29, on L_CT |
-| Effective transient inductance, per phase | Renesas |
-| Maximum L_C for slew | IFX Eq. 31 |
-| C_OUT for controller delay | IFX Eq. 32 |
-| Slew and bandwidth gain vs buck | IFX Eq. 46, 47, 48 — verified, on bare L_C |
-| L_C transient excursions | IFX Eq. 50, 56 |
-| Loop time constant | IFX Eq. 57 |
-| Effective loop inductance L_CT | Renesas |
-| I_SUM slopes | TI Eq. 18, 20 — TI-only |
-| C_OUT required | TI Eq. 1 — TI-only |
-| L_C saturation floor | TI Eq. 22 — TI-only |
-| Peak L_C voltage | TI Eq. 24 — TI-only |
-| L_C loop power loss | TI Eq. 26 — TI-only |
-| Low-side FET RMS | TI Eq. 27 — TI-only |
+| Result                                          | Source                                     |
+| ----------------------------------------------- | ------------------------------------------ |
+| Duty, overlap counts, D_HF, t_overlap           | IFX Eq. 7–10                               |
+| L_C / phase / output ripple                     | IFX Eq. 11–17                              |
+| Transformer saturation requirement              | IFX Eq. 18                                 |
+| Output ripple with ESR and ESL                  | IFX Eq. 19                                 |
+| Effective transient inductance, whole regulator | IFX Eq. 29, on L_CT                        |
+| Effective transient inductance, per phase       | Renesas                                    |
+| Maximum L_C for slew                            | IFX Eq. 31                                 |
+| C_OUT for controller delay                      | IFX Eq. 32                                 |
+| Slew and bandwidth gain vs buck                 | IFX Eq. 46, 47, 48 — verified, on bare L_C |
+| L_C transient excursions                        | IFX Eq. 50, 56                             |
+| Loop time constant                              | IFX Eq. 57                                 |
+| Effective loop inductance L_CT                  | Renesas                                    |
+| I_SUM slopes                                    | TI Eq. 18, 20 — TI-only                    |
+| C_OUT required                                  | TI Eq. 1 — TI-only                         |
+| L_C saturation floor                            | TI Eq. 22 — TI-only                        |
+| Peak L_C voltage                                | TI Eq. 24 — TI-only                        |
+| L_C loop power loss                             | TI Eq. 26 — TI-only                        |
+| Low-side FET RMS                                | TI Eq. 27 — TI-only                        |
 
 ---
 
@@ -338,11 +338,11 @@ L_CT = (1 - k^2) x L_M x N + L_C
 Validated against the Renesas worked example (8-phase, 12 V to 1.8 V,
 L_M = 200 nH, L_C = 150 nH, k = 0.98, 600 kHz):
 
-| Quantity | Renesas | This calculator | Their simulation |
-|---|---|---|---|
-| L_CT | 213 nH | 213 nH | — |
-| L_C ripple | 1.88 A | 1.84 A | 1.9 A |
-| Summed output ripple | 15.8 A | 16.4 A | 16.7 A |
+| Quantity             | Renesas | This calculator | Their simulation |
+| -------------------- | ------- | --------------- | ---------------- |
+| L_CT                 | 213 nH  | 213 nH          | —                |
+| L_C ripple           | 1.88 A  | 1.84 A          | 1.9 A            |
+| Summed output ripple | 15.8 A  | 16.4 A          | 16.7 A           |
 
 Before the correction the same code returned 2.61 A and 22.5 A, roughly 40%
 high. **Any change to the ripple path must be re-checked against this example.**
@@ -377,9 +377,9 @@ counterpart to defer to. Revisit as a group, not piecemeal.
 
 ### Validation additions
 
-| Quantity | Renesas | This calculator |
-|---|---|---|
-| Per-phase transient L | 24.3 nH | 24.38 nH |
+| Quantity              | Renesas | This calculator |
+| --------------------- | ------- | --------------- |
+| Per-phase transient L | 24.3 nH | 24.38 nH        |
 
 ### Other correctness fixes from the same review
 
@@ -409,30 +409,30 @@ wordmark are **not** used inside the calculator; only colour, type and tone.
 
 **Neutrals**
 
-| Token | Hex | Use |
-|---|---|---|
-| Ink | `#0E1116` | Primary text, dark surfaces |
-| Ink 2 | `#161A20` | Cards on dark |
-| Ink 3 | `#1F242C` | Raised dark tile |
-| Slate | `#59626E` | Labels, secondary text on light |
-| Slate dark | `#8A94A1` | Secondary text on dark |
-| Line | `#E7E9ED` | Hairlines on light |
-| Line 2 | `#DADDE2` | Stronger hairline |
-| Line dark | `#242A32` | Hairlines on dark |
-| Paper | `#FFFFFF` | Light background |
-| Paper 2 | `#F6F7F9` | Light section tint |
+| Token      | Hex       | Use                             |
+| ---------- | --------- | ------------------------------- |
+| Ink        | `#0E1116` | Primary text, dark surfaces     |
+| Ink 2      | `#161A20` | Cards on dark                   |
+| Ink 3      | `#1F242C` | Raised dark tile                |
+| Slate      | `#59626E` | Labels, secondary text on light |
+| Slate dark | `#8A94A1` | Secondary text on dark          |
+| Line       | `#E7E9ED` | Hairlines on light              |
+| Line 2     | `#DADDE2` | Stronger hairline               |
+| Line dark  | `#242A32` | Hairlines on dark               |
+| Paper      | `#FFFFFF` | Light background                |
+| Paper 2    | `#F6F7F9` | Light section tint              |
 
 **Semantic four**
 
-| Token | Hex | Meaning |
-|---|---|---|
-| `--ready` | `#15B86A` | Ready / go / success. Also the brand accent |
-| `--ready-bright` | `#2BD27D` | Live accent on dark |
-| `--ready-deep` | `#0C7A48` | Legible green text on light |
-| `--signal` | `#2C66EA` | Interactive: buttons, links, info |
-| `--signal-deep` | `#1B4FCB` | Legible blue text on light |
-| `--fault` | `#EF4444` | Fault / stop / destructive |
-| `--warn` | `#F5C542` | Caution / thermal derate |
+| Token            | Hex       | Meaning                                     |
+| ---------------- | --------- | ------------------------------------------- |
+| `--ready`        | `#15B86A` | Ready / go / success. Also the brand accent |
+| `--ready-bright` | `#2BD27D` | Live accent on dark                         |
+| `--ready-deep`   | `#0C7A48` | Legible green text on light                 |
+| `--signal`       | `#2C66EA` | Interactive: buttons, links, info           |
+| `--signal-deep`  | `#1B4FCB` | Legible blue text on light                  |
+| `--fault`        | `#EF4444` | Fault / stop / destructive                  |
+| `--warn`         | `#F5C542` | Caution / thermal derate                    |
 
 ### The colour rule — do not break this
 
@@ -447,16 +447,16 @@ green. An earlier copper accent was removed for violating this.
 
 ### Typography
 
-| Role | Font / weight | Size · line-height |
-|---|---|---|
-| Hero / H1 | Sora 800 | clamp 36–60px · 1.02 |
-| H2 | Sora 700 | 30px · 1.2 |
-| H3 | Sora 600 | 17–20px · 1.3 |
-| Body | Inter 400 | 16px · 1.55 |
-| Body strong | Inter 600 | 16px · 1.55 |
-| Small / caption | Inter 400 | 12–13px · 1.4 |
-| Eyebrow / tag | JetBrains Mono 500 | 11–12px · upper · .12em |
-| Data / specs | JetBrains Mono 400–500 | 13–15px · 1.5 |
+| Role            | Font / weight          | Size · line-height      |
+| --------------- | ---------------------- | ----------------------- |
+| Hero / H1       | Sora 800               | clamp 36–60px · 1.02    |
+| H2              | Sora 700               | 30px · 1.2              |
+| H3              | Sora 600               | 17–20px · 1.3           |
+| Body            | Inter 400              | 16px · 1.55             |
+| Body strong     | Inter 600              | 16px · 1.55             |
+| Small / caption | Inter 400              | 12–13px · 1.4           |
+| Eyebrow / tag   | JetBrains Mono 500     | 11–12px · upper · .12em |
+| Data / specs    | JetBrains Mono 400–500 | 13–15px · 1.5           |
 
 **Every measured value uses JetBrains Mono** — voltages, currents, inductances,
 part numbers. Non-negotiable in the calculator and all documents.

@@ -5,7 +5,7 @@
 
 var TERMS = {
   /* --- operating point --- */
-vin: {
+  vin: {
     t: "Input voltage (V_IN)",
     d: "The bus voltage feeding the high-side FET of every phase. Sets the on-state magnetizing voltage and the compensating-loop voltage.",
     long: [
