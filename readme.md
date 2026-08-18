@@ -134,6 +134,14 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
 - [ ] Obtain a clean transcription of the Renesas overshoot-based C_OUT method
       so it can replace the TI equation and complete the source priority
 - [ ] Confirm no confidential documents remain in the public repository
+- [ ] **Decide whether the bandwidth equations should use L_CT.** IFX Eq. 47
+      and 48 are published on bare L_C and are currently implemented that way.
+      Since the real secondary loop impedance is L_CT, both read optimistically
+      high on achievable bandwidth. Left as published rather than silently
+      deviating from the source — see §7.
+- [ ] Supply real C_OUT bulk ESR and ESL figures. The defaults (0.2 mΩ, 50 pH)
+      are placeholders, and ESR dominates output voltage ripple by roughly 19x
+      over the capacitive term at the reference operating point
 
 ### The t_RESP placeholder — read this before trusting transient results
 
@@ -193,7 +201,7 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 
 | File | Contents |
 |---|---|
-| `index.html` | Page structure and design-mode inputs |
+| `index.html` | Page structure, design-mode inputs, result tab bar |
 | `style.css` | Styling only, both light and dark themes |
 | `equations.js` | **All design maths.** Every function annotated with its source document and equation number |
 | `terms.js` | Glossary: short text for tooltips, extended text for detail panels |
@@ -208,6 +216,12 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 - **Brand fonts load from Google Fonts with full system fallbacks.** No other
   external dependency: no CDN libraries, no frameworks.
 - **No build step.** Edit a file, refresh, done.
+- **Script order matters.** `charts.js` must load before `calc.js`, because
+  `calc.js` calls `initLive()` at parse time and needs `window.TLVRDetail` to
+  already exist. Loading it after fails silently — empty selects, no charts.
+- **`.panel` belongs to the modal detail panel only.** Result tab fieldsets use
+  `.tabpanel`. The modal rule carries `overflow:hidden` and `max-height:88vh`,
+  which clips inline charts if the class is reused.
 - **No invented numbers.** Every figure and claim traces to a numbered equation
   or a datasheet table. Where a quantity cannot be derived from the sources —
   core loss being the standing example, which needs Steinmetz coefficients none
@@ -223,6 +237,14 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
   appears only on terms that have a chart.
 - Results tagged with the document and equation they came from.
 - Pass/fail chips on limit checks.
+- **Results split into four tabs** (operating point, steady-state ripple,
+  transient, component limits) so one section is visible at a time.
+- **A live chart in every results tab**, with a select to choose the swept
+  variable. Redraws on every keystroke in the input form, so the design-point
+  marker tracks the inputs as you type. Reuses the `charts.js` registry via
+  `TLVRDetail.renderInto(term, container)`.
+- Inputs sit in a sticky left column; the results column scrolls independently
+  with the tab bar pinned, so the chart stays visible while inputs are adjusted.
 - Presets: reference design, TI Table 2, Renesas worked example.
 - Save and reload the input set as JSON.
 - Light and dark themes, defaulting to the operating system preference.
@@ -247,10 +269,11 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 | L_C / phase / output ripple | IFX Eq. 11–17 |
 | Transformer saturation requirement | IFX Eq. 18 |
 | Output ripple with ESR and ESL | IFX Eq. 19 |
-| Effective transient inductance | IFX Eq. 29 |
+| Effective transient inductance, whole regulator | IFX Eq. 29, on L_CT |
+| Effective transient inductance, per phase | Renesas |
 | Maximum L_C for slew | IFX Eq. 31 |
 | C_OUT for controller delay | IFX Eq. 32 |
-| Slew and bandwidth gain vs buck | IFX Eq. 46, 47, 48 |
+| Slew and bandwidth gain vs buck | IFX Eq. 46, 47, 48 — verified, on bare L_C |
 | L_C transient excursions | IFX Eq. 50, 56 |
 | Loop time constant | IFX Eq. 57 |
 | Effective loop inductance L_CT | Renesas |
@@ -288,6 +311,52 @@ A useful consequence for the module product: at high phase count this leakage
 term alone can exceed the minimum loop inductance needed to hold ripple inside
 the saturation budget, at which point no discrete L_C is required for ripple and
 it becomes purely a transient tuning choice.
+
+### The correction now applies to the transient path too
+
+The correction was originally applied only to the ripple equations, leaving the
+transient path on bare L_C — the same physics corrected in one place and not the
+other. Renesas uses L_CT on both sides, and their transient slide gives:
+
+L_eq_per_phase = L_CT x L_M / (L_C + N x L_M)
+
+
+On the same worked example that is 213 x 200 / (150 + 1600) = **24.3 nH**. The
+uncorrected code returned 17.8 nH for the equivalent quantity, 37% optimistic.
+
+`lTrans`, `slopeUpTlvr` and `slopeDownTlvr` now take a `leakage` flag defaulting
+to true and compute L_CT internally. `lTransPhase` was added for the Renesas
+per-phase form. **The regulator-wide and per-phase figures differ by roughly 4x
+at the reference operating point** — they are displayed as separate rows and
+must not be conflated.
+
+Still on bare L_C, deliberately: `lcMaxFromSlew` (IFX Eq. 31), `iSatLcNeeded`
+(TI Eq. 22), `iLcTransOn` / `iLcTransOff` (IFX Eq. 50, 56), and the bandwidth
+pair (IFX Eq. 47, 48). These are published that way and there is no vendor
+counterpart to defer to. Revisit as a group, not piecemeal.
+
+### Validation additions
+
+| Quantity | Renesas | This calculator |
+|---|---|---|
+| Per-phase transient L | 24.3 nH | 24.38 nH |
+
+### Other correctness fixes from the same review
+
+- `nSimOnMin` compared a float to an integer (`nMax === N * D`), so the
+  integer-N·D case IFX Eq. 8 calls out never fired. Now uses a 1e-9 tolerance.
+- The steady-state ripple pass/fail chip judged `dI_mag / I_ph_DC`, i.e. the
+  magnetizing term alone. Saturation and RMS follow total phase ripple, so it
+  now judges `dI_ph / I_ph_DC`. At the reference point this moved 13% (fail) to
+  20% (pass).
+- Output voltage ripple was capacitive-only. Now uses IFX Eq. 19 including ESR
+  and ESL, with the capacitive term shown separately beneath it.
+- IFX Eq. 47 and 48 were audited and are correct as implemented. The hard-coded
+  8.5 in `fcMax` is not arbitrary: 0.10 x 8.5 = 0.85, the 85% ceiling expressed
+  inside the 10%-of-f_SW rule of thumb. Reproduces Infineon's own worked example
+  (500 kHz, 8 phases, L_M = L_C, 385 kHz crossover) at t_delay ≈ 244 ns.
+  Note Infineon's revision history shows Eq. 48 and 49 were corrected in v1.2 —
+  cite v1.4 only.
 
 ---
 
@@ -380,4 +449,9 @@ alarm or blame. This governs tooltip and detail-panel text.
 - Calculator inputs use engineering units (nH, mV, ns, mΩ, µF, kHz);
   `calc.js` converts to SI on read. `equations.js` is SI throughout.
 - Keep the source citation comment on every function in `equations.js`.
+- Where a function can run with or without the leakage correction, expose a
+  `leakage` flag defaulting to true rather than forking the function.
+- New chart terms must be registered in the `CHARTS` object in `charts.js` and
+  referenced by the same key in the `LIVE` map in `calc.js`. A key present in
+  one and absent from the other logs a console warning.
 - Results are estimates. Confirm against simulation before committing a design.
