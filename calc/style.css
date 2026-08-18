@@ -123,7 +123,20 @@ main{
   max-width:1400px; margin:0 auto;
 }
 .inputs{order:1; position:sticky; top:16px}
-.results{order:2}
+.results{
+  order:2;
+  position:sticky; top:16px;
+  max-height:calc(100vh - 32px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:4px;
+}
+/* keep the tab bar visible while the panel body scrolls under it */
+.results .tabs{
+  position:sticky; top:0; z-index:2;
+  background:var(--bg);
+  padding-top:2px;
+}
 
 /* ---------- result tabs ---------- */
 .tabs{display:flex; gap:2px; flex-wrap:wrap; border-bottom:1px solid var(--border)}
@@ -230,7 +243,7 @@ legend{
 
 /* ---------- tooltip ---------- */
 #tip{
-  position:absolute; z-index:50; max-width:340px;
+  position:fixed; z-index:50; max-width:340px;
   background:var(--surface); color:var(--text);
   border:1px solid var(--border);
   border-left:3px solid var(--signal);
@@ -352,6 +365,8 @@ footer{
 @media (max-width:1100px){
   main{grid-template-columns:1fr}
   .inputs{position:static}
+  .results{position:static; max-height:none; overflow:visible; padding-right:0}
+  .results .tabs{position:static}
   .tab{padding:9px 11px; letter-spacing:.06em}
 }
 @media (prefers-reduced-motion:reduce){
