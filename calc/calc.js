@@ -177,22 +177,27 @@
 
   /* ---- live charts: one plot per tab, sweep variable chosen by the select ---- */
   var LIVE = {
-    op:     { terms: ["vout", "nph", "fsw"],        sel: "pick-op",     plot: "plot-op" },
-    ripple: { terms: ["lc", "lm", "k", "fsw"],      sel: "pick-ripple", plot: "plot-ripple" },
-    trans:  { terms: ["istep", "lc", "cout"],       sel: "pick-trans",  plot: "plot-trans" },
-    limits: { terms: ["itdc", "rlc", "vin"],        sel: "pick-limits", plot: "plot-limits" }
+    op:     { terms: ["vout", "vin", "nph", "fsw"],      sel: "pick-op",     plot: "plot-op" },
+    ripple: { terms: ["lc", "lm", "k", "fsw", "nph"],    sel: "pick-ripple", plot: "plot-ripple" },
+    trans:  { terms: ["coutgov", "lc", "lm", "k"],       sel: "pick-trans",  plot: "plot-trans" },
+    limits: { terms: ["itdc", "rlc", "rsec", "rroute"],  sel: "pick-limits", plot: "plot-limits" }
   };
 
   function initLive() {
     Object.keys(LIVE).forEach(function (key) {
       var cfg = LIVE[key], sel = $(cfg.sel);
       if (!sel || !window.TLVRDetail) return;
-      cfg.terms.filter(window.TLVRDetail.has).forEach(function (t) {
+      cfg.terms.forEach(function (t) {
+        if (!window.TLVRDetail.has(t)) {
+          console.warn("TLVRLive: no chart registered for term '" + t + "'");
+          return;
+        }
         var o = document.createElement("option");
         o.value = t;
         o.textContent = "Sweep " + ((TERMS[t] && TERMS[t].t) || t);
         sel.appendChild(o);
       });
+      void 0;
       if (!sel.options.length) { sel.parentNode.hidden = true; return; }
       sel.addEventListener("change", drawLive);
     });
