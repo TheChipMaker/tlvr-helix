@@ -151,7 +151,28 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
 - [ ] Supply real C_OUT bulk ESR and ESL figures. The defaults (0.2 mΩ, 50 pH)
       are placeholders, and ESR dominates output voltage ripple by roughly 19x
       over the capacitive term at the reference operating point
+### Chart/panel divergence — found in the Step 3 audit
 
+The results panel and the charts disagreed because `charts.js` was never
+updated when dual-phase scaling landed. Recorded here because the root cause
+will recur: **any new consumer of the input set must be checked against
+`applyDualPhase`, not just `solve()`.**
+
+- [x] ~~Charts computed leakage with the M-scaled L_M~~, reading ~96 nH where
+      the panel read 101.9 nH. Fixed by replacing `LmLeak` with an `M`
+      multiplier in `EQ.lct` — see §7.
+- [x] ~~Chart markers plotted scaled values~~, so the "you are here" line on the
+      L_M chart sat at 75 nH when 150 nH was typed. Fixed by carrying `LmRaw`
+      and `LcRaw` through `applyDualPhase`.
+- [x] ~~Presets were broken by derived `nph`.~~ They wrote a read-only field and
+      left the module definition untouched, so the Renesas preset silently
+      loaded a 2-phase design. Presets now set `m_stages`/`m_pwm`/`m_count`.
+- [ ] The `nph` chart sweeps PWM count against M-scaled magnetics, which is not
+      a meaningful comparison. It should sweep stages-per-PWM instead.
+- [ ] Eleven terms render a `?` with no glossary entry, so the marker appears
+      and does nothing: `esr`, `esl`, `vripc`, `ltransph` (pre-existing) and
+      `m_pwm`, `stagerip`, `m_istage`, `m_budget`, `m_vsec`, `m_imon`,
+      `m_ppri` (added in Step 3).
 ### The t_RESP placeholder — read this before trusting transient results
 
 The preset ships with `t_RESP = 1 µs`, which is **not grounded in any source**.
@@ -311,11 +332,19 @@ Measured cost at the reference point:
 #### Two subtleties that will bite anyone editing this
 
 **Leakage does not scale with M.** `L_CT` counts *physical* series secondaries,
-and four stages put four in the loop however many PWMs drive them. But
-`(1-k^2) x L_M x N_phys / M` is identically `(1-k^2) x L_M x N_pwm`, so `EQ.lct`
-takes one optional `LmLeak` argument carrying the **unscaled** per-transformer
-L_M. Omit it and the function is bit-identical to the validated single-stage
-form. Do not "simplify" this by passing the scaled L_M.
+and four stages put four in the loop however many PWMs drive them. `EQ.lct`
+therefore takes an optional `M` multiplier:
+
+    L_CT = (1 - k^2) x L_M x M x N + L_C
+
+where `L_M` is the already-scaled value and `M x N` recovers the physical
+secondary count. `M` defaults to 1, making the function bit-identical to the
+validated single-stage form.
+
+This was first implemented as an `LmLeak` argument carrying the raw L_M. That
+is correct at the design point but **wrong under sweeping** — a chart varying
+L_M would hold leakage frozen at the typed value while the curve moved. The
+multiplier form tracks the swept value automatically. Do not revert it.
 
 **Ripple and current come out as PWM-pair quantities.** Under `L_M -> L_M/M`,
 `dI_mag` and `I_ph_DC` are the pair total, not per transformer. Saturation,

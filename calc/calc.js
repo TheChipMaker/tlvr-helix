@@ -65,7 +65,7 @@
 
   /* ---- collapse stages onto PWM channels (Infineon dual-phase mode) ----
    Mutates p in place: N becomes the PWM count, Lm and Lc are divided by M,
-   and LmLeak carries the raw per-transformer L_M for the leakage term.
+   and LmRaw / LcRaw carry the as-typed values for chart markers and axes.
    M = 1 leaves every downstream number bit-identical to the single-stage
    path, which is what the Renesas 213 nH validation exercises.            */
   function applyDualPhase(p) {
@@ -75,7 +75,8 @@
     p.N = s.N;
     p.Lm = s.Lm;
     p.Lc = s.Lc;
-    p.LmLeak = s.LmLeak;
+    p.LmRaw = s.LmRaw;      // as typed — for chart markers and axis ranges
+    p.LcRaw = s.LcRaw;
     p.nPhys = s.nPhys;
     $("nph").value = p.N;          // derived display
     return p;
@@ -92,10 +93,10 @@
     o.fHF = EQ.fHF(p.N, p.fsw);
     o.tOv = EQ.tOverlap(p.N, o.D, p.fsw);
 
-    o.Lct = EQ.lct({ k: p.k, N: p.N, Lm: p.Lm, Lc: p.Lc, LmLeak: p.LmLeak });
+    o.Lct = EQ.lct({ k: p.k, N: p.N, Lm: p.Lm, Lc: p.Lc, M: p.M });
     o.iLc = EQ.iLcRipple({
       k: p.k, N: p.N, D: o.D, vin: p.vin, vout: p.vout,
-      Lc: p.Lc, Lm: p.Lm, LmLeak: p.LmLeak, fsw: p.fsw
+      Lc: p.Lc, Lm: p.Lm, M: p.M, fsw: p.fsw
     });
     o.iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: o.D });
     o.iPh = EQ.iPhaseRipple(o.iMag, p.k, o.iLc);
@@ -121,12 +122,12 @@
     o.rImon = EQ.imonResistor({ M: p.M });
     o.pPri = o.stRms * o.stRms * p.rPri;
 
-    o.lTrans = EQ.lTrans({ Lm: p.Lm, Lc: p.Lc, k: p.k, N: p.N, LmLeak: p.LmLeak });
-    o.lTransPh = EQ.lTransPhase({ Lm: p.Lm, Lc: p.Lc, k: p.k, N: p.N, LmLeak: p.LmLeak });
+    o.lTrans = EQ.lTrans({ Lm: p.Lm, Lc: p.Lc, k: p.k, N: p.N, M: p.M });
+    o.lTransPh = EQ.lTransPhase({ Lm: p.Lm, Lc: p.Lc, k: p.k, N: p.N, M: p.M });
     o.slUpBuck = EQ.slopeUpBuck({ nOn: p.nOn, N: p.N, vin: p.vin, vout: p.vout, Lm: p.Lm });
-    o.slUp = EQ.slopeUpTlvr({ nOn: p.nOn, N: p.N, vin: p.vin, vout: p.vout, Lm: p.Lm, Lc: p.Lc, k: p.k, LmLeak: p.LmLeak });
+    o.slUp = EQ.slopeUpTlvr({ nOn: p.nOn, N: p.N, vin: p.vin, vout: p.vout, Lm: p.Lm, Lc: p.Lc, k: p.k, M: p.M });
     o.slDnBuck = EQ.slopeDownBuck({ N: p.N, vout: p.vout, Lm: p.Lm });
-    o.slDn = EQ.slopeDownTlvr({ N: p.N, vout: p.vout, Lm: p.Lm, Lc: p.Lc, k: p.k, LmLeak: p.LmLeak });
+    o.slDn = EQ.slopeDownTlvr({ N: p.N, vout: p.vout, Lm: p.Lm, Lc: p.Lc, k: p.k, M: p.M });
 
     o.coutUp = EQ.coutRequired({ iStep: p.iStep, slope: o.slUp, dVac: p.dVac, rLL: p.rLL });
     o.coutDn = EQ.coutRequired({ iStep: p.iStep, slope: o.slDn, dVac: p.dVac, rLL: p.rLL });

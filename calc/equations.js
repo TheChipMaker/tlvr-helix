@@ -46,7 +46,8 @@ EQ.dualPhase = ({ Lm, Lc, nStages, M }) => ({
   N: nStages / M,
   Lm: Lm / M,
   Lc: Lc / M,
-  LmLeak: Lm
+  LmRaw: Lm,
+  LcRaw: Lc
 });
 
 // De-lump PWM-pair quantities back to per-transformer figures.
@@ -79,25 +80,19 @@ EQ.imonResistor = ({ rNominal = 1000, M }) => rNominal / M;
 
 /* --- steady-state ripple ------------------------------------------------ */
 
-// Effective compensating-loop inductance including winding leakage.
-// Lct = (1-k^2)*Lm*N + Lc   [REN]
-// The N series secondaries each contribute leakage (1-k^2)*Lm, which adds to Lc.
-// Validated: applying Lct reproduces the Renesas worked example (dI_Lc = 1.88 A,
-// summed ripple = 15.8 A) where bare Lc over-predicts both by ~42%.
-// LmLeak is the UNSCALED per-transformer L_M. In dual-phase mode Lm arrives
-// pre-divided by M (Infineon) but leakage counts physical secondaries, and
-// (1-k^2)*Lm*N_phys/M is identically (1-k^2)*Lm*N_pwm — so pass raw Lm here.
-// Omit LmLeak (M=1) and this is bit-identical to the validated single-stage form.
-EQ.lct = ({ k, N, Lm, Lc, LmLeak }) =>
-  (1 - k * k) * (LmLeak === undefined ? Lm : LmLeak) * N + Lc;
+// M x N recovers the physical secondary count from the PWM count; Lm is the
+// already-scaled value. M defaults to 1, making this bit-identical to the
+// validated single-stage form. Sweep-safe: a varying Lm carries its own
+// leakage, which an absolute raw-Lm argument would not.
+EQ.lct = ({ k, N, Lm, Lc, M = 1 }) => (1 - k * k) * Lm * M * N + Lc;
 
 // dI_Lc_pkpk = k*(NsimOnMax*Vin - N*Vout) * D_HF / (Lct * f_HF)   [IFX Eq. 11 + REN Lct]
 // Set leakage=false to use bare Lc (Infineon form) instead.
-EQ.iLcRipple = ({ k, N, D, vin, vout, Lc, Lm, LmLeak, fsw, leakage = true }) => {
+EQ.iLcRipple = ({ k, N, D, vin, vout, Lc, Lm, M, fsw, leakage = true }) => {
   const nMax = EQ.nSimOnMax(N, D);
   const dhf = EQ.dHF(N, D);
   const fhf = EQ.fHF(N, fsw);
-  const Leff = leakage && Lm ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
+  const Leff = leakage && Lm ? EQ.lct({ k, N, Lm, Lc, M }) : Lc;
   return (k * (nMax * vin - N * vout) * dhf) / (Leff * fhf);
 };
 
@@ -131,23 +126,23 @@ EQ.vOutRipple = ({ iOut, N, fsw, Cout }) =>
 
 // L_trans (whole regulator) = Lm*Le / (k^2*N^2*Lm + N*Le)   [IFX Eq. 29]
 // Le = Lct when leakage is accounted for, else bare Lc.
-EQ.lTrans = ({ Lm, Lc, k, N, LmLeak, leakage = true }) => {
-  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
+EQ.lTrans = ({ Lm, Lc, k, N, M, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, M }) : Lc;
   return (Lm * Le) / (k * k * N * N * Lm + N * Le);
 };
 
 // Per-phase equivalent transient inductance   [REN]
 // L_eq_ph = Lct * Lm / (Lc + N*Lm)   — validated: 24.3 nH on the Renesas example
-EQ.lTransPhase = ({ Lm, Lc, k, N, LmLeak }) =>
-  (EQ.lct({ k, N, Lm, Lc, LmLeak }) * Lm) / (Lc + N * Lm);
+EQ.lTransPhase = ({ Lm, Lc, k, N, M }) =>
+  (EQ.lct({ k, N, Lm, Lc, M }) * Lm) / (Lc + N * Lm);
 
 // Rising Isum slope, multiphase buck   [TI, Eq. 15/16 basis]
 EQ.slopeUpBuck = ({ nOn, N, vin, vout, Lm }) =>
   (nOn * (vin - vout)) / Lm - ((N - nOn) * vout) / Lm;
 
 // Rising Isum slope, TLVR   [TI Eq. 18]
-EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc, k, LmLeak, leakage = true }) => {
-  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
+EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc, k, M, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, M }) : Lc;
   return EQ.slopeUpBuck({ nOn, N, vin, vout, Lm }) +
     (N * (nOn * vin - N * vout)) / Le;
 };
@@ -156,8 +151,8 @@ EQ.slopeUpTlvr = ({ nOn, N, vin, vout, Lm, Lc, k, LmLeak, leakage = true }) => {
 EQ.slopeDownBuck = ({ N, vout, Lm }) => -(N * vout) / Lm;
 
 // Falling Isum slope, TLVR   [TI Eq. 20]
-EQ.slopeDownTlvr = ({ N, vout, Lm, Lc, k, LmLeak, leakage = true }) => {
-  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, LmLeak }) : Lc;
+EQ.slopeDownTlvr = ({ N, vout, Lm, Lc, k, M, leakage = true }) => {
+  const Le = leakage ? EQ.lct({ k, N, Lm, Lc, M }) : Lc;
   return EQ.slopeDownBuck({ N, vout, Lm }) - (N * (N * vout)) / Le;
 };
 
