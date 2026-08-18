@@ -338,7 +338,8 @@ vin: {
     d: "How many independent phases one module contains: one power stage plus one TLVR transformer each.",
     long: [
       "This is the granularity of the product. Two phases per module means the integrator can only build systems in multiples of two, which is normally fine since TLVR designs favour even, symmetric phase counts.",
-      "Do not confuse this with dual-phase mode. Here each phase has its own transformer and its own PWM. In dual-phase mode two power stages share one transformer and one PWM, and Infineon requires halving both L_M and L_C in the calculation. If your module drives two stages from one PWM, use the design calculator's dual-phase treatment instead."
+      "Each stage has its own TLVR transformer, but stages need not have their own PWM. The Helix module drives four stages from two PWM outputs, so two stages share each PWM in Infineon's dual-phase mode. Set stages per module and PWM channels per module separately; the calculator derives M = stages / PWM and applies Infineon's halving of L_M and L_C.",
+      "TLVR transient benefit scales with PWM channel count, not stage count. Four stages on two PWMs gives the same slew gain as two stages on two PWMs, at twice the current. The module is a higher-current 2-phase block, not a 4-phase one."
     ],
     src: "IFX Section 2.8.1 for the dual-phase distinction"
   },

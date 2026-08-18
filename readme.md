@@ -143,6 +143,7 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
       inputs that already exist in design mode, so the two modes can silently
       disagree about the same design. See §5. Preferred fix is to fold it in as
       a fifth results tab reading the shared input set.
+- [ ] Supply real C_OUT bulk ESR and ESL figures. The defaults (0.2 mΩ, 50 pH)
       are placeholders, and ESR dominates output voltage ripple by roughly 19x
       over the capacitive term at the reference operating point
 

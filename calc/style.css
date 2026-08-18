@@ -114,7 +114,7 @@ body{
 }
 
 /* ---------- layout ---------- */
-main, #module-mode{
+main{
   display:grid;
   grid-template-columns:minmax(300px,.85fr) minmax(420px,1.15fr);
   gap:20px;
@@ -364,7 +364,7 @@ footer{
 
 /* ---------- responsive ---------- */
 @media (max-width:1100px){
-  main, #module-mode{grid-template-columns:1fr}
+  main{grid-template-columns:1fr}
   .inputs{position:static}
   .results{position:static; max-height:none; overflow:visible; padding-right:0}
   .results .tabs{position:static}
@@ -373,4 +373,3 @@ footer{
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important; animation:none !important}
 }
-#module-mode[hidden]{display:none}
