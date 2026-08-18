@@ -220,7 +220,7 @@
       build: function (p) {
         var D = EQ.dutyCycle(p.vin, p.vout);
         var iLc = EQ.iLcRipple({
-          k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+          k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
           Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
         });
         var iRms = EQ.iRmsLc(iLc);
@@ -258,10 +258,10 @@
       build: function (p) {
         var hi = Math.max(p.iStep * 2, 100);
         var su = EQ.slopeUpTlvr({
-          nOn: p.nOn, N: p.N, vin: p.vin, vout: p.vout,
+          nOn: p.nOn, N: p.N, M: p.M, vin: p.vin, vout: p.vout,
           Lm: p.Lm, Lc: p.Lc
         });
-        var sd = EQ.slopeDownTlvr({ N: p.N, vout: p.vout, Lm: p.Lm, Lc: p.Lc });
+        var sd = EQ.slopeDownTlvr({ N: p.N, M: p.M, vout: p.vout, Lm: p.Lm, Lc: p.Lc });
         var a = sweep(1, hi, 80, function (i) {
           return EQ.coutRequired({ iStep: i, slope: su, dVac: p.dVac, rLL: p.rLL }) * 1e6;
         });
@@ -312,7 +312,7 @@
       build: function (p) {
         var a = sweep(4.25, 16, 90, function (v) {
           return EQ.iLcRipple({
-            k: p.k, N: p.N, D: EQ.dutyCycle(v, p.vout),
+            k: p.k, N: p.N, M: p.M, D: EQ.dutyCycle(v, p.vout),
             vin: v, vout: p.vout, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
           });
         });
@@ -341,14 +341,14 @@
         var hi = Math.max(p.vout * 4, p.vin * 0.4);
         var a = sweep(0.2, hi, 160, function (v) {
           return EQ.iLcRipple({
-            k: p.k, N: p.N, D: EQ.dutyCycle(p.vin, v),
+            k: p.k, N: p.N, M: p.M, D: EQ.dutyCycle(p.vin, v),
             vin: p.vin, vout: v, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
           });
         });
         var b = sweep(0.2, hi, 160, function (v) {
           var D = EQ.dutyCycle(p.vin, v);
           var iLc = EQ.iLcRipple({
-            k: p.k, N: p.N, D: D, vin: p.vin, vout: v,
+            k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: v,
             Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
           });
           var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
@@ -377,7 +377,7 @@
         for (n = 2; n <= 16; n++) {
           D = EQ.dutyCycle(p.vin, p.vout);
           iLc = EQ.iLcRipple({
-            k: p.k, N: n, D: D, vin: p.vin, vout: p.vout,
+            k: p.k, N: n, M: p.M, D: D, vin: p.vin, vout: p.vout,
             Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
           });
           iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
@@ -408,7 +408,7 @@
         var hi = Math.max(p.iTdc * 2, p.N * 90 * 1.15);
         var D = EQ.dutyCycle(p.vin, p.vout);
         var iLc = EQ.iLcRipple({
-          k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+          k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
           Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
         });
         var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
@@ -446,12 +446,12 @@
         var D = EQ.dutyCycle(p.vin, p.vout);
         var a = sweep(0.85, 0.999, 90, function (kk) {
           return EQ.iLcRipple({
-            k: kk, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            k: kk, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
             Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
           });
         });
         var b = sweep(0.85, 0.999, 90, function (kk) {
-          return EQ.lct({ k: kk, N: p.N, Lm: p.Lm, Lc: p.Lc }) * 1e9;
+          return EQ.lct({ k: kk, N: p.N, Lm: p.Lm, Lc: p.Lc, M: p.M }) * 1e9;
         });
         return {
           x: { label: "Coupling coefficient k", unit: "", values: a.xs },
@@ -475,16 +475,19 @@
       build: function (p) {
                 var lo = 40e-9, hi = Math.max(p.LmRaw * 3, 400e-9);
         var D = EQ.dutyCycle(p.vin, p.vout);
-        var a = sweep(lo, hi, 80, function (Lm) {
+        // The axis is in as-typed L_M; the equations want the M-scaled value,
+        // so divide inside the callback. At M = 1 this is a no-op.
+        var a = sweep(lo, hi, 80, function (LmRaw) {
+          var Lm = LmRaw / p.M;
           var iMag = EQ.iMagRipple({ vin: p.vin, Lm: Lm, fsw: p.fsw, D: D });
           var iLc = EQ.iLcRipple({
-            k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
             Lc: p.Lc, Lm: Lm, fsw: p.fsw
           });
           return EQ.iPhaseRipple(iMag, p.k, iLc);
         });
-        var b = sweep(lo, hi, 80, function (Lm) {
-          return EQ.lct({ k: p.k, N: p.N, Lm: Lm, Lc: p.Lc }) * 1e9;
+        var b = sweep(lo, hi, 80, function (LmRaw) {
+          return EQ.lct({ k: p.k, N: p.N, Lm: LmRaw / p.M, Lc: p.Lc, M: p.M }) * 1e9;
         });
         return {
           x: {
@@ -512,16 +515,17 @@
         var D = EQ.dutyCycle(p.vin, p.vout);
         var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
 
-        var a = sweep(lo, hi, 80, function (Lc) {
+        // Axis in as-typed L_C; equations want the M-scaled value.
+        var a = sweep(lo, hi, 80, function (LcRaw) {
           return EQ.iLcRipple({
-            k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
-            Lc: Lc, Lm: p.Lm, fsw: p.fsw
+            k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
+            Lc: LcRaw / p.M, Lm: p.Lm, fsw: p.fsw
           });
         });
-        var b = sweep(lo, hi, 80, function (Lc) {
+        var b = sweep(lo, hi, 80, function (LcRaw) {
           var s = EQ.slopeUpTlvr({
-            nOn: p.nOn, N: p.N, vin: p.vin,
-            vout: p.vout, Lm: p.Lm, Lc: Lc
+            nOn: p.nOn, N: p.N, M: p.M, vin: p.vin,
+            vout: p.vout, Lm: p.Lm, Lc: LcRaw / p.M
           });
           return EQ.coutRequired({
             iStep: p.iStep, slope: s,
@@ -565,7 +569,7 @@
 
         var a = sweep(lo, hi, 80, function (f) {
           return EQ.iLcRipple({
-            k: p.k, N: p.N, D: D, vin: p.vin, vout: p.vout,
+            k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
             Lc: p.Lc, Lm: p.Lm, fsw: f
           });
         });
