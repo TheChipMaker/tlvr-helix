@@ -1,0 +1,4 @@
+(fp_lib_table
+	(version 7)
+	(lib (name "TDA22594A") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/TDA22594A.pretty") (options "") (descr ""))
+)

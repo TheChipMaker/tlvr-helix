@@ -1,3 +1,6 @@
-- Inductor: TDK VLBUC Series
-- Chip: 
-TI: TPS53679
+- Inductor:
+   - SLV9080-101KED (Coilcraft)
+   -TLVR1105T-R10Y (Bourns)
+   - CSHN100760 (Codaca)
+
+- Chip: TDA22594A
