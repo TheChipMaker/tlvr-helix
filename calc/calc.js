@@ -255,10 +255,11 @@
     if (x + tip.offsetWidth > window.innerWidth - 12) {
       x = window.innerWidth - tip.offsetWidth - 12;
     }
-    // flip above the marker if it would run off the bottom of the viewport
-    if (y + tip.offsetHeight > window.innerHeight - 12) {
-      y = r.top - tip.offsetHeight - 8;
-    }
+    // flip above the marker if it would run off the bottom of the viewport,
+    // and mirror the hover bridge so pointer travel still works
+    var flip = y + tip.offsetHeight > window.innerHeight - 12;
+    if (flip) y = r.top - tip.offsetHeight - 8;
+    tip.classList.toggle("flip", flip);
     tip.style.left = Math.max(8, x) + "px";
     tip.style.top = Math.max(8, y) + "px";
   }
@@ -279,7 +280,7 @@
   tip.addEventListener("mouseleave", queueHide);
 
   var resultsCol = document.querySelector(".results");
-  if (resultsCol) resultsCol.addEventListener("scroll", hideTip);
+  // capture phase already catches .results and any nested scroller
   window.addEventListener("scroll", hideTip, true);
 
   tip.addEventListener("click", function (e) {

@@ -114,7 +114,7 @@ body{
 }
 
 /* ---------- layout ---------- */
-main{
+main, #module-mode{
   display:grid;
   grid-template-columns:minmax(300px,.85fr) minmax(420px,1.15fr);
   gap:20px;
@@ -268,6 +268,7 @@ legend{
 #tip::before{
   content:""; position:absolute; left:0; right:0; top:-10px; height:10px;
 }
+#tip.flip::before{top:auto; bottom:-10px}
 #tip .more{
   margin-top:12px; width:100%;
   font-family:var(--font-body); font-weight:500; font-size:12.5px;

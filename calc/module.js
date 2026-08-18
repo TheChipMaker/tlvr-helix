@@ -46,7 +46,7 @@
     sec.id = "module-mode";
     sec.hidden = true;
     sec.innerHTML =
-      '<div class="col">' +
+      '<div class="col inputs">' +
         '<fieldset><legend>Module definition &mdash; fixed at manufacture</legend>' +
           '<div class="grid">' +
             '<label data-term="m_stages">Phases per module<span class="u">&mdash;</span><input id="m_stages" type="number" step="1" value="2"></label>' +
@@ -67,7 +67,7 @@
           '</div>' +
         '</fieldset>' +
       '</div>' +
-      '<div class="col">' +
+      '<div class="col results">' +
         '<fieldset><legend>System scale</legend><div class="rows" id="m-scale"></div></fieldset>' +
         '<fieldset><legend>Integrator constraints &mdash; publish these</legend><div class="rows" id="m-limits"></div></fieldset>' +
         '<fieldset><legend>Module contribution to the loop</legend><div class="rows" id="m-loop"></div></fieldset>' +
