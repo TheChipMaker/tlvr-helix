@@ -676,5 +676,25 @@
 
   build();
 
-  window.TLVRDetail = { open: open, has: function (t) { return !!CHARTS[t]; } };
+  /* Render a chart inline into an arbitrary container, for the live panels.
+     Safe to call on every input change — it rebuilds from current inputs. */
+  function renderInto(term, container) {
+    var c = CHARTS[term];
+    container.innerHTML = "";
+    if (!c) return false;
+    var spec = c.build(window.TLVR.readInputs());
+    var wrap = document.createElement("div");
+    wrap.className = "chart-wrap";
+    wrap.appendChild(draw(spec));
+    container.appendChild(wrap);
+    container.appendChild(legend(spec));
+    return true;
+  }
+
+  window.TLVRDetail = {
+    open: open,
+    has: function (t) { return !!CHARTS[t]; },
+    renderInto: renderInto,
+    terms: function () { return Object.keys(CHARTS); }
+  };
 })();

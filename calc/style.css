@@ -115,13 +115,15 @@ body{
 
 /* ---------- layout ---------- */
 main{
-  display:flex;
-  flex-direction:column;
+  display:grid;
+  grid-template-columns:minmax(420px,1.15fr) minmax(300px,.85fr);
   gap:20px;
   padding:24px 28px 8px;
+  align-items:start;
   max-width:1400px; margin:0 auto;
 }
-.inputs{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px}
+.results{order:1}
+.inputs{order:2; position:sticky; top:16px}
 
 /* ---------- result tabs ---------- */
 .tabs{display:flex; gap:2px; flex-wrap:wrap; border-bottom:1px solid var(--border)}
@@ -315,6 +317,16 @@ legend{
 .chart .marker-lbl{fill:var(--text); font-size:9.5px}
 .chart .limit-lbl{fill:var(--fault); font-size:9.5px; text-anchor:end}
 .chart .readout{fill:var(--text); font-size:10.5px; font-weight:500}
+.live{margin-top:20px; padding-top:18px; border-top:1px solid var(--border)}
+.pick{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--text-2);
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:7px 10px; margin-bottom:14px; cursor:pointer;
+}
+.pick:hover{border-color:var(--border-2); color:var(--link)}
+.pick:focus-visible{outline:2px solid var(--link); outline-offset:2px}
+.live[hidden]{display:none}
 .chart-legend{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px}
 .chart-legend .lg{
   font-family:var(--font-mono); font-size:11px; color:var(--text-2);
@@ -337,8 +349,10 @@ footer{
 }
 
 /* ---------- responsive ---------- */
-@media (max-width:860px){
-  .inputs{grid-template-columns:1fr}
+@media (max-width:1100px){
+  main{grid-template-columns:1fr}
+  .results{order:2}
+  .inputs{order:1; position:static}
   .tab{padding:9px 11px; letter-spacing:.06em}
 }
 @media (prefers-reduced-motion:reduce){

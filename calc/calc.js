@@ -175,10 +175,47 @@
       row("plc",    "L_C loop power loss",     fx(o.pLc, 2) + " W",   "TI Eq. 26");
   }
 
+  /* ---- live charts: one plot per tab, sweep variable chosen by the select ---- */
+  var LIVE = {
+    op:     { terms: ["vout", "nph", "fsw"],        sel: "pick-op",     plot: "plot-op" },
+    ripple: { terms: ["lc", "lm", "k", "fsw"],      sel: "pick-ripple", plot: "plot-ripple" },
+    trans:  { terms: ["istep", "lc", "cout"],       sel: "pick-trans",  plot: "plot-trans" },
+    limits: { terms: ["itdc", "rlc", "vin"],        sel: "pick-limits", plot: "plot-limits" }
+  };
+
+  function initLive() {
+    Object.keys(LIVE).forEach(function (key) {
+      var cfg = LIVE[key], sel = $(cfg.sel);
+      if (!sel || !window.TLVRDetail) return;
+      cfg.terms.filter(window.TLVRDetail.has).forEach(function (t) {
+        var o = document.createElement("option");
+        o.value = t;
+        o.textContent = "Sweep " + ((TERMS[t] && TERMS[t].t) || t);
+        sel.appendChild(o);
+      });
+      if (!sel.options.length) { sel.parentNode.hidden = true; return; }
+      sel.addEventListener("change", drawLive);
+    });
+  }
+
+  function drawLive() {
+    if (!window.TLVRDetail) return;
+    Object.keys(LIVE).forEach(function (key) {
+      var cfg = LIVE[key], sel = $(cfg.sel), plot = $(cfg.plot);
+      if (!sel || !plot || !sel.value) return;
+      var panel = plot.closest(".panel");
+      if (panel && panel.hidden) return;       // skip hidden tabs — cheap
+      window.TLVRDetail.renderInto(sel.value, plot);
+    });
+  }
+
   function update() {
     var p = readInputs();
     render(p, solve(p));
+    drawLive();
   }
+
+  window.TLVRLive = { draw: drawLive, init: initLive };
 
   window.TLVR = { readInputs: readInputs, solve: solve };
 
@@ -330,6 +367,7 @@
         o.setAttribute("aria-selected", on ? "true" : "false");
         if (panel) panel.hidden = !on;
       });
+      if (window.TLVRLive) window.TLVRLive.draw();
     });
   });
   themeBtn.addEventListener("click", function () {
@@ -346,5 +384,6 @@
   for (var i = 0; i < IDS.length; i++) {
     $(IDS[i]).addEventListener("input", update);
   }
+  initLive();
   update();
 })();
