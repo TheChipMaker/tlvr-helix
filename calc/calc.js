@@ -212,7 +212,7 @@
     Object.keys(LIVE).forEach(function (key) {
       var cfg = LIVE[key], sel = $(cfg.sel), plot = $(cfg.plot);
       if (!sel || !plot || !sel.value) return;
-      var panel = plot.closest(".panel");
+      var panel = plot.closest(".tabpanel");
       if (panel && panel.hidden) return;       // skip hidden tabs — cheap
       window.TLVRDetail.renderInto(sel.value, plot);
     });
