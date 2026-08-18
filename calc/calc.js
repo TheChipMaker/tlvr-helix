@@ -249,13 +249,18 @@
     tip.hidden = false;
 
     var r = el.getBoundingClientRect();
-    var x = r.left + window.scrollX;
-    var y = r.bottom + window.scrollY + 8;
+    var x = r.left;
+    var y = r.bottom + 8;
+
     if (x + tip.offsetWidth > window.innerWidth - 12) {
       x = window.innerWidth - tip.offsetWidth - 12;
     }
+    // flip above the marker if it would run off the bottom of the viewport
+    if (y + tip.offsetHeight > window.innerHeight - 12) {
+      y = r.top - tip.offsetHeight - 8;
+    }
     tip.style.left = Math.max(8, x) + "px";
-    tip.style.top = y + "px";
+    tip.style.top = Math.max(8, y) + "px";
   }
 
   function queueHide() {
@@ -272,6 +277,10 @@
   });
   tip.addEventListener("mouseenter", function () { clearTimeout(tipTimer); });
   tip.addEventListener("mouseleave", queueHide);
+
+  var resultsCol = document.querySelector(".results");
+  if (resultsCol) resultsCol.addEventListener("scroll", hideTip);
+  window.addEventListener("scroll", hideTip, true);
 
   tip.addEventListener("click", function (e) {
     if (e.target.classList.contains("more") && tipTerm) {
