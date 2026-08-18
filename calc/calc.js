@@ -396,17 +396,20 @@
     // This design. TI Table 2 is 12V/0.8V 4ph 600k Lm150n Lc180n — near identical,
     // so those magnetics are a validated starting point.
     helix: {
-      vin: 12, vout: 0.75, fsw: 600, nph: 4, itdc: 240, k: 0.98, lm: 150, lc: 180,
+            vin: 12, vout: 0.75, fsw: 600, m_stages: 4, m_pwm: 2, m_count: 1,
+      m_isat: 80, m_irated: 60, m_rpri: 0.18, itdc: 240, k: 0.98, lm: 150, lc: 180,
       rlc: 0.4, rsec: 0.3, rroute: 0.5, pcore: 0.2, istep: 200, tstep: 500,
       dvac: 30, rll: 0, tresp: 1, non: 4, dramp: 0.9, tdelay: 200, cout: 5000
     },
     ti: {
-      vin: 12, vout: 0.8, fsw: 600, nph: 4, itdc: 325, k: 0.98, lm: 150, lc: 180,
+            vin: 12, vout: 0.8, fsw: 600, m_stages: 4, m_pwm: 4, m_count: 1,
+      m_isat: 80, m_irated: 60, m_rpri: 0.18, itdc: 325, k: 0.98, lm: 150, lc: 180,
       rlc: 0.4, rsec: 0.3, rroute: 0.5, pcore: 0.2, istep: 300, tstep: 500,
       dvac: 30, rll: 0, tresp: 1, non: 4, dramp: 0.9, tdelay: 200, cout: 5000
     },
     ren: {
-      vin: 12, vout: 1.8, fsw: 600, nph: 8, itdc: 400, k: 0.98, lm: 200, lc: 150,
+            vin: 12, vout: 1.8, fsw: 600, m_stages: 8, m_pwm: 8, m_count: 1,
+      m_isat: 80, m_irated: 60, m_rpri: 0.18, itdc: 400, k: 0.98, lm: 200, lc: 150,
       rlc: 0.4, rsec: 0.3, rroute: 0.5, pcore: 0.2, istep: 200, tstep: 500,
       dvac: 30, rll: 0, tresp: 1, non: 8, dramp: 0.9, tdelay: 200, cout: 5000
     }

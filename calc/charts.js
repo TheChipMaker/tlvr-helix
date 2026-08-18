@@ -473,7 +473,7 @@
         "slows the loop. Choose L_M for steady-state ripple first, then " +
         "solve for L_C.",
       build: function (p) {
-        var lo = 40e-9, hi = Math.max(p.Lm * 3, 400e-9);
+                var lo = 40e-9, hi = Math.max(p.LmRaw * 3, 400e-9);
         var D = EQ.dutyCycle(p.vin, p.vout);
         var a = sweep(lo, hi, 80, function (Lm) {
           var iMag = EQ.iMagRipple({ vin: p.vin, Lm: Lm, fsw: p.fsw, D: D });
@@ -495,7 +495,7 @@
             { label: "Total phase ripple", unit: "A", values: a.ys, axis: "left" },
             { label: "Effective loop L_CT", unit: "nH", values: b.ys, axis: "right", dash: true }
           ],
-          marker: { value: p.Lm * 1e9, label: "chosen" },
+                    marker: { value: p.LmRaw * 1e9, label: "chosen" },
           leftLabel: "Ripple (A)", rightLabel: "L_CT (nH)"
         };
       }
@@ -508,7 +508,7 @@
         "The red line is the ceiling from the slew requirement — any " +
         "L_C to the right of it cannot track the load step at all.",
       build: function (p) {
-        var lo = 40e-9, hi = Math.max(p.Lc * 3, 400e-9);
+                var lo = 40e-9, hi = Math.max(p.LcRaw * 3, 400e-9);
         var D = EQ.dutyCycle(p.vin, p.vout);
         var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
 
@@ -543,7 +543,7 @@
             { label: "L_C ripple", unit: "A", values: a.ys, axis: "left" },
             { label: "C_OUT needed", unit: "\u00B5F", values: b.ys, axis: "right", dash: true }
           ],
-          marker: { value: p.Lc * 1e9, label: "chosen" },
+                    marker: { value: p.LcRaw * 1e9, label: "chosen" },
           limit: { value: lcMax * 1e9, label: "slew limit" },
           leftLabel: "Ripple (A)",
           rightLabel: "C_OUT (\u00B5F)",
