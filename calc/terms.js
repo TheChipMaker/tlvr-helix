@@ -387,5 +387,103 @@ var TERMS = {
     t: "Per-phase RMS current",
     d: "Drives power-stage conduction loss and heating. TLVR designs run higher phase RMS than buck for the same load because of the added Lc ripple.",
     src: "TI, Power Loss"
+  },
+  m_pwm: {
+    t: "PWM channels per module",
+    d: "How many independent controller PWM outputs drive the module. Stages divided by this gives M, the dual-phase multiplier.",
+    long: [
+      "The Helix module is four stages on two PWMs, so M = 2. Set this equal to the stage count for conventional one-stage-per-PWM operation.",
+      "This is the number that governs TLVR transient benefit. Slew gain is L_M over L_C times N, where N is this value times the module count. Adding stages without adding PWM channels buys current density, not response.",
+      "Infineon treats two stages on one PWM as a single phase carrying twice the current, with both L_M and L_C halved in the calculation. Because both halve, the ratio is unchanged and the multiplier cancels out of the slew expression entirely."
+    ],
+    src: "IFX Section 2.8.1, dual-phase mode"
+  },
+  stagerip: {
+    t: "Per-stage ripple and peak",
+    d: "Ripple and peak current in one transformer, as opposed to the PWM-pair totals shown above.",
+    long: [
+      "Under Infineon's dual-phase treatment L_M is divided by M, so magnetizing ripple and DC current come out as the pair total rather than per device. Component ratings are per device, so these are the figures to check against the transformer saturation curve and the power stage.",
+      "The L_C ripple term is not divided. Loop current couples into every transformer at full value through k, so only the magnetizing and DC terms are shared between the two stages on a PWM."
+    ],
+    src: "IFX Section 2.8.1 with Eq. 12"
+  },
+  m_istage: {
+    t: "Per-stage DC current",
+    d: "Thermal design current divided by the physical stage count: the DC each power stage and its transformer carries.",
+    long: [
+      "Compare this against the device thermal derating curve at your ambient and airflow, not against the absolute maximum. For the TDA22594A the absolute maximum average output current is 90 A, but the usable continuous figure in still air at elevated ambient is considerably lower."
+    ],
+    src: "TDA22594A thermal characteristics"
+  },
+  m_budget: {
+    t: "Loop ripple budget",
+    d: "The largest L_C loop ripple the module tolerates before its transformers saturate. The headline number an integrator needs.",
+    long: [
+      "From Infineon Eq. 18 rearranged. The gap between saturation current and rated current is the entire ripple allowance, and the magnetizing term consumes part of it before L_C ripple gets any.",
+      "Publishing a rated current without stating this condition is incomplete. An integrator choosing too small an L_C will saturate the transformers, and Infineon is explicit that the resulting steep ramp translates into every phase, the controller loses control, and the power stage sees effectively a short."
+    ],
+    src: "IFX Eq. 18 rearranged"
+  },
+  m_vsec: {
+    t: "Secondary interconnect voltage",
+    d: "Worst-case voltage across the series secondary loop, with all stages conducting simultaneously.",
+    long: [
+      "Grows with phase count as N_ON times V_IN minus N times V_OUT. At four phases and 12 V input this is about 45 V; at sixteen phases it approaches 180 V.",
+      "TI's layout guidance labels the L_C pad as high voltage, 50 V or more. Rate the inter-module interconnect for the largest system the module is sold to support, since this is invisible from single-module analysis."
+    ],
+    src: "TI Eq. 24, all stages on"
+  },
+  m_imon: {
+    t: "IMON summing resistor",
+    d: "Sense resistor value when M current-output IMON pins are tied to one node.",
+    long: [
+      "The TDA22594A reports phase current as a current source at 5 microamps per amp. Current outputs sum when tied together, so M stages on one node deliver M times the current and the resistor scales down proportionally to hold the controller's volts-per-amp scaling.",
+      "The alternative is to keep the nominal resistor and rescale inside the controller. Either works; do not do both."
+    ],
+    src: "TDA22594A IMON specification"
+  },
+  m_ppri: {
+    t: "Primary loss per stage",
+    d: "Conduction loss in one primary winding at the per-stage RMS current.",
+    long: [
+      "This does not appear in the compensating loop calculations, which are a secondary-side path. It matters for module efficiency and thermals, which is the module designer's problem rather than the integrator's.",
+      "Renesas guidance is to keep primary DCR below 0.2 milliohms."
+    ],
+    src: "Renesas winding resistance guidance"
+  },
+  esr: {
+    t: "C_OUT bulk ESR",
+    d: "Equivalent series resistance of the bulk output capacitor bank.",
+    long: [
+      "At the reference operating point the ESR term dominates output voltage ripple by roughly nineteen times over the capacitive term, so a placeholder value here makes the ripple figure meaningless.",
+      "Take it from the capacitor datasheet at the ripple frequency, divided by the number of parts in parallel, and add the mounting and plane resistance."
+    ],
+    src: "IFX Eq. 19"
+  },
+  esl: {
+    t: "C_OUT bulk ESL",
+    d: "Equivalent series inductance of the bulk output capacitor bank and its mounting.",
+    long: [
+      "Enters Infineon Eq. 19 multiplied by two times N times f_SW, so its contribution grows with both phase count and switching frequency.",
+      "Mounting inductance usually dominates the part's own ESL. Via count and placement relative to the load matter more than the capacitor selection."
+    ],
+    src: "IFX Eq. 19"
+  },
+  vripc: {
+    t: "Capacitive ripple term",
+    d: "The output voltage ripple that capacitance alone would produce, shown separately beneath the full figure.",
+    long: [
+      "Useful as a diagnostic. If this sits far below the full Infineon Eq. 19 result, then ESR or ESL is setting your ripple and adding capacitance will not help."
+    ],
+    src: "IFX Eq. 19, capacitive term"
+  },
+  ltransph: {
+    t: "Transient L, per phase",
+    d: "Renesas per-phase equivalent transient inductance, L_CT times L_M over L_C plus N times L_M.",
+    long: [
+      "Distinct from the regulator-wide figure above, and roughly four times different at the reference operating point. The two are displayed as separate rows and must not be conflated.",
+      "Validated against the Renesas worked example at 24.3 nH."
+    ],
+    src: "Renesas transient slide"
   }
 };

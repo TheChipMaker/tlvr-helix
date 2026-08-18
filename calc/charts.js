@@ -548,7 +548,7 @@
             { label: "C_OUT needed", unit: "\u00B5F", values: b.ys, axis: "right", dash: true }
           ],
                     marker: { value: p.LcRaw * 1e9, label: "chosen" },
-          limit: { value: lcMax * 1e9, label: "slew limit" },
+          limit: { value: lcMax * p.M * 1e9, label: "slew limit" },
           leftLabel: "Ripple (A)",
           rightLabel: "C_OUT (\u00B5F)",
           _iMag: iMag
