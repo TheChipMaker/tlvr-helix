@@ -268,7 +268,7 @@
           return Math.max(
             EQ.coutRequired({ iStep: p.iStep, slope: su, dVac: dv, rLL: p.rLL }),
             EQ.coutRequired({ iStep: p.iStep, slope: sd, dVac: dv, rLL: p.rLL }),
-            EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: dv })
+            EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: dv, rLL: p.rLL })
           );
         };
 
@@ -279,7 +279,9 @@
           return EQ.coutRequired({ iStep: p.iStep, slope: sd, dVac: dv, rLL: p.rLL }) * 1e6;
         });
         var c = sweep(2e-3, hi, 80, function (dv) {
-          return EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: dv }) * 1e6;
+          return EQ.coutMinDelay({
+            tDelay: p.tDelay, iStep: p.iStep, dVac: dv, rLL: p.rLL
+          }) * 1e6;
         });
 
         // Tightest budget the planned C_OUT can still satisfy: scan for the
@@ -328,13 +330,15 @@
           return EQ.coutRequired({ iStep: i, slope: sd, dVac: p.dVac, rLL: p.rLL }) * 1e6;
         });
         var c = sweep(1, hi, 80, function (i) {
-          return EQ.coutMinDelay({ tDelay: p.tDelay, iStep: i, dVout: p.dVac }) * 1e6;
+          return EQ.coutMinDelay({
+            tDelay: p.tDelay, iStep: i, dVac: p.dVac, rLL: p.rLL
+          }) * 1e6;
         });
         return {
           x: { label: "Load step I_STEP (A)", unit: "A", values: a.xs },
           series: [
-            { label: "Step up (TI Eq. 1)", unit: "\u00B5F", values: a.ys, axis: "left" },
-            { label: "Release (TI Eq. 20 slope)", unit: "\u00B5F", values: b.ys, axis: "left" },
+            { label: "Step up (TI Eq. 4)", unit: "\u00B5F", values: a.ys, axis: "left" },
+            { label: "Release (TI Eq. 5)", unit: "\u00B5F", values: b.ys, axis: "left" },
             { label: "Controller delay (IFX Eq. 32)", unit: "\u00B5F", values: c.ys, axis: "left", dash: true }
           ],
           marker: { value: p.iStep, label: "chosen" },

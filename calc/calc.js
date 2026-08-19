@@ -131,14 +131,20 @@
 
     o.coutUp = EQ.coutRequired({ iStep: p.iStep, slope: o.slUp, dVac: p.dVac, rLL: p.rLL });
     o.coutDn = EQ.coutRequired({ iStep: p.iStep, slope: o.slDn, dVac: p.dVac, rLL: p.rLL });
-    o.coutDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: p.dVac });
+    o.coutDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: p.dVac, rLL: p.rLL });
     o.coutNeed = Math.max(o.coutUp, o.coutDn, o.coutDly);
     o.lcMax = EQ.lcMaxFromSlew({
       k: p.k, N: p.N, iStep: p.iStep, tStep: p.tStep,
       dRamp: p.dRamp, vin: p.vin, vout: p.vout, Lm: p.Lm
     });
 
-    o.iSat = EQ.iSatLcNeeded({ tResp: p.tResp, nOn: p.nOn, vin: p.vin, N: p.N, vout: p.vout, Lc: p.Lc });
+    // L_C saturation floor. IFX Eq. 50 supersedes TI Eq. 22: same quantity,
+    // higher-priority source, and it carries k and the transient duty cycle.
+    // M cancels through (N/M against Lc/M), so the collapsed values are correct.
+    o.iSat = EQ.iLcTransOn({
+      k: p.k, tTransOn: p.tResp, dTrans: p.dRamp,
+      N: p.N, vin: p.vin, vout: p.vout, Lc: p.Lc
+    });
     // Physical stress, not the M-collapsed model value. All nPhys secondaries
     // sit in series in the loop and nOn PWM channels drive M stages each, so
     // the real voltage is M times what the collapsed N would report.
@@ -212,16 +218,16 @@
         { ok: gainUp > 1, label: fx(gainUp, 2) + "x buck" }) +
       row("slopedn", "Falling I_SUM slope", eng(o.slDn, "A/s", 2), "TI Eq. 20",
         { ok: gainDn > 1, label: fx(gainDn, 2) + "x buck" }) +
-      row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2), "TI Eq. 1 \u2014 no IFX/REN equivalent") +
-      row("coutrel", "C_OUT required (release)", eng(o.coutDn, "F", 2), "TI Eq. 1, Eq. 20 slope") +
-      row("coutdelay", "C_OUT for controller delay", eng(o.coutDly, "F", 2), "IFX Eq. 32") +
+      row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2), "TI Eq. 4 \u2014 no IFX/REN equivalent") +
+      row("coutrel", "C_OUT required (release)", eng(o.coutDn, "F", 2), "TI Eq. 5, Eq. 20 slope") +
+      row("coutdelay", "C_OUT for controller delay", eng(o.coutDly, "F", 2), "IFX Eq. 32, on the TI Eq. 4 budget") +
       row("coutgov", "C_OUT governing value", eng(o.coutNeed, "F", 2), "max of the three",
         { ok: coutOk, label: coutOk ? "planned OK" : "short" }) +
       row("lcmax", "Max L_C for slew target", eng(o.lcMax, "H", 1), "IFX Eq. 31",
         { ok: lcOk, label: lcOk ? "L_C OK" : "L_C too large" });
 
     $("r-limits").innerHTML =
-      row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "TI Eq. 22, needs margin above") +
+      row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "IFX Eq. 50 — scales with t_RESP") +
       row("vlcmax", "Peak L_C voltage", fx(o.vLc, 1) + " V", "TI Eq. 24",
         { ok: o.vLc <= p.vin, label: o.vLc > p.vin ? "exceeds V_IN" : "under V_IN" }) +
       row("taulc", "L_C loop time constant", eng(o.tau, "s", 2), "IFX Eq. 57 (= TI Eq. 23)") +
@@ -498,8 +504,9 @@
 
     L.push("");
     L.push("== L_C LOOP ==");
-    L.push("  peak voltage     " + f(o.vLc, 1) + " V   (V_IN " + p.vin + " V)");
-    L.push("  I_SAT needed     " + f(o.iSat, 1) + " A");
+    L.push("  peak voltage     " + f(o.vLc, 1) + " V   (V_IN " + p.vin + " V)   [TI Eq. 24]");
+    L.push("  I_SAT needed     " + f(o.iSat, 1) + " A   [IFX Eq. 50 — scales with t_RESP,");
+    L.push("                                       which is an unconfirmed placeholder]");
     L.push("  decay tau        " + f(o.tau * 1e6, 2) + " us");
     L.push("  loop loss        " + f(o.pLc, 2) + " W");
 

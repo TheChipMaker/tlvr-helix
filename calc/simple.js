@@ -47,7 +47,7 @@
     });
     var cUp = EQ.coutRequired({ iStep: p.iStep, slope: slUp, dVac: p.dVac, rLL: p.rLL });
     var cDn = EQ.coutRequired({ iStep: p.iStep, slope: slDn, dVac: p.dVac, rLL: p.rLL });
-    var cDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: p.dVac });
+    var cDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: p.dVac, rLL: p.rLL });
     var cNeed = Math.max(cUp, cDn, cDly);
     var gov = (cNeed === cDly) ? "controller delay"
       : (cNeed === cDn) ? "load release" : "load step-up";
@@ -110,7 +110,7 @@
     out.CoutReq = Math.max(
       EQ.coutRequired({ iStep: p.iStep, slope: sUp, dVac: p.dVac, rLL: p.rLL }),
       EQ.coutRequired({ iStep: p.iStep, slope: sDn, dVac: p.dVac, rLL: p.rLL }),
-      EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: p.dVac })
+      EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: p.dVac, rLL: p.rLL })
     );
 
     // Cheapest lever when C_OUT is short: the load line that closes the gap.
