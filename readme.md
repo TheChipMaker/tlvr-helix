@@ -183,6 +183,11 @@ will recur: **any new consumer of the input set must be checked against
 - [ ] The `nph` chart sweeps PWM count against M-scaled magnetics, which is not
       a meaningful comparison. It should sweep **stages per PWM** instead,
       since that is now the live design question.
+- [ ] **`non` is unvalidated against `N`.** It counts PWM channels, but nothing
+      stops a value above the channel count being typed, and the results look
+      plausible rather than obviously wrong. On the Helix cell, entering 4 for
+      "all four chips firing" inflates the step-up slope and peak L_C voltage
+      with no warning. Clamp it to `N`, and label the field in channels.
 
 All chart/panel divergence is resolved. `charts.js` threads `M` through all
 15 equation call sites; `grep -c "M: p.M" calc/charts.js` should return 15.
@@ -251,7 +256,6 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
 | `terms.js`     | Glossary: short text for tooltips, extended text for detail panels                                                         |
 | `calc.js`      | Unit conversion, live recompute, tooltips, presets, JSON save/load                                                         |
 | `charts.js`    | Detail panel, SVG chart renderer, per-term chart registry                                                                  |
-| `module.js`    | Module mode: builds its own panel and spec-sheet output. **Structurally parallel to the design path — see the note below** |
 
 ### Deliberate constraints — do not break these
 
@@ -369,6 +373,10 @@ into every transformer at full value through k. Getting this wrong reports
 failure against an 80 A part.
 - Presets: reference design, TI Table 2, Renesas worked example.
 - Save and reload the input set as JSON.
+- **Export report** writes `tlvr-report.txt`: every input as typed, plus the
+  full computed set — topology, ripple, per-stage currents, transient, loop —
+  in flat readable text. Intended for pasting into a review conversation, so
+  format for a human reader rather than a parser.
 - Light and dark themes, defaulting to the operating system preference.
 
 ---
@@ -503,6 +511,21 @@ Two things about this table that are not defects:
   (500 kHz, 8 phases, L_M = L_C, 385 kHz crossover) at t_delay ≈ 244 ns.
   Note Infineon's revision history shows Eq. 48 and 49 were corrected in v1.2 —
   cite v1.4 only.
+- **Peak L_C voltage was reported in collapsed units**, understating the real
+  stress by exactly M. TI Eq. 24 is `N_ON x V_IN - N x V_OUT`, and it was being
+  fed the PWM channel count. But the voltage is a *physical* stress: all `nPhys`
+  secondaries sit in series in the loop, and each of the `nOn` channels drives
+  `M` stages. On the Helix cell that is 4x12 - 4x0.7 = 45.2 V, where the
+  collapsed form reported 22.6 V. Now computed as
+  `(nOn x M) x V_IN - nPhys x V_OUT`, matching `vSecPeak`, which was already
+  correct.
+
+  **No other result was affected.** The M-scaling divides `L_C` by M as well, so
+  the loop *current* `dV/L_C` is identical either way — slopes, ripple and C_OUT
+  were all right. Only the displayed voltage was wrong, and it is the number
+  that specifies L_C insulation and interconnect rating, so it mattered. This
+  is the same class of bug as the chart divergence above: a quantity that is
+  physical rather than per-channel being fed collapsed inputs.
 
 ---
 
@@ -606,6 +629,12 @@ alarm or blame. This governs tooltip and detail-panel text.
   already-scaled values and must not divide by M themselves. If a new consumer
   of the input set appears, route it through `window.TLVR.readInputs`, not the
   private `readInputs`.
+- **Decide whether each quantity is per-channel or physical before wiring it.**
+  Collapsed `N` and scaled `L_M`/`L_C` are correct for anything the M-scaling
+  cancels through — slopes, ripple, capacitance. Anything describing a physical
+  part needs `nPhys` and `M`: saturation current, per-device RMS, secondary
+  loop voltage, interconnect rating. Both the `stageSplit` split and the
+  Eq. 24 fix are instances of the same question.
 - Layout belongs to shared selectors. Prefer adding a mode to an existing rule
   over writing a rule for that mode.
 - Results are estimates. Confirm against simulation before committing a design.
