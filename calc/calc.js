@@ -446,7 +446,7 @@
 
   /* ---- export inputs + computed results as readable text ---- */
   $("exportBtn").addEventListener("click", function () {
-    var p = readInputs(), o = compute(p), L = [];
+    var p = window.TLVR.readInputs(), o = solve(p), L = [];
     function f(v, d) {
       return (typeof v === "number" && isFinite(v)) ? v.toFixed(d === undefined ? 3 : d) : String(v);
     }
