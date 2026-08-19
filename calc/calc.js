@@ -465,7 +465,9 @@
     L.push("  L_M as typed     " + f(p.LmRaw * 1e9, 1) + " nH  -> model " + f(p.Lm * 1e9, 1) + " nH");
     L.push("  L_C as typed     " + f(p.LcRaw * 1e9, 1) + " nH  -> model " + f(p.Lc * 1e9, 1) + " nH");
     L.push("  duty cycle D     " + f(o.D, 4));
-    L.push("  L_CT effective   " + f(o.lTrans * 1e9, 1) + " nH");
+    L.push("  L_CT loop        " + f(EQ.lct({ k: p.k, N: p.N, Lm: p.Lm, Lc: p.Lc, M: p.M }) * 1e9, 1) + " nH");
+    L.push("  L_trans, whole   " + f(o.lTrans * 1e9, 1) + " nH");
+    L.push("  L_trans, /phase  " + f(o.lTransPh * 1e9, 2) + " nH");
 
     L.push("");
     L.push("== STEADY-STATE RIPPLE ==");
