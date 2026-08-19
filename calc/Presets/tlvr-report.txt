@@ -1,5 +1,5 @@
 TLVR design report
-Generated 2026-08-19T08:57:13.768Z
+Generated 2026-08-19T09:08:00.943Z
 
 == INPUTS (as typed) ==
   vin = 12
@@ -17,12 +17,12 @@ Generated 2026-08-19T08:57:13.768Z
   istep = 200
   tstep = 500
   dvac = 30
-  rll = 0
+  rll = 0.1
   tresp = 1
-  non = 4
+  non = 2
   dramp = 0.9
   tdelay = 200
-  cout = 5000
+  cout = 6000
   esr = 0.2
   esl = 50
   m_stages = 4
@@ -39,14 +39,16 @@ Generated 2026-08-19T08:57:13.768Z
   L_M as typed     82.0 nH  -> model 41.0 nH
   L_C as typed     180.0 nH  -> model 90.0 nH
   duty cycle D     0.0583
-  L_CT effective   11.8 nH
+  L_CT loop        102.9 nH
+  L_trans, whole   11.8 nH
+  L_trans, /phase  24.52 nH
 
 == STEADY-STATE RIPPLE ==
   magnetizing      26.80 A
   loop I_LC        9.62 A   (RMS 2.78 A)
   per-phase        36.03 A
   summed output    43.60 A
-  V_OUT ripple     14.86 mV
+  V_OUT ripple     14.71 mV
 
 == PER-STAGE CURRENTS ==
   DC pedestal      60.0 A
@@ -56,16 +58,16 @@ Generated 2026-08-19T08:57:13.768Z
   I_SAT needed     71.3 A   (device 95 A)
 
 == TRANSIENT ==
-  slope up         2042.69 A/us   (buck 1136.59)
+  slope up         990.66 A/us   (buck 551.22)
   slope down       61.37 A/us   (buck 34.15)
-  C_OUT step up    326 uF
-  C_OUT release    10863 uF
+  C_OUT step up    404 uF
+  C_OUT release    6518 uF
   C_OUT delay      1333 uF
-  C_OUT GOVERNING  10863 uF   (planned 5000 uF)   *** SHORT ***
+  C_OUT GOVERNING  6518 uF   (planned 6000 uF)   *** SHORT ***
   L_C max (slew)   Infinity nH
 
 == L_C LOOP ==
-  peak voltage     93.2 V   (V_IN 12 V)
-  I_SAT needed     517.8 A
+  peak voltage     45.2 V   (V_IN 12 V)
+  I_SAT needed     251.1 A
   decay tau        60.00 us
   loop loss        0.21 W

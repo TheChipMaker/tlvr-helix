@@ -21,6 +21,7 @@
       <span class="sub">Trans-Inductor Voltage Regulator &mdash; design calculator</span>
     </div>
     <div class="toolbar">
+      <button id="mode" type="button" title="Component-selection view">Simple</button>
       <button id="theme" type="button" title="Switch between light and dark">Dark</button>
       <select id="preset" title="Load a stored design">
         <option value="">Load preset&hellip;</option>
@@ -107,7 +108,7 @@
               value="0"></label>
           <label data-term="tresp">Controller response<span class="u">&micro;s</span><input id="tresp" type="number"
               step="any" value="1"></label>
-          <label data-term="non">Phases on in step<span class="u">&mdash;</span><input id="non" type="number" step="1"
+          <label data-term="non">PWM channels on in step<span class="u">&mdash;</span><input id="non" type="number" step="1"
               value="4"></label>
           <label data-term="dramp">Ramp duty cycle<span class="u">&mdash;</span><input id="dramp" type="number"
               step="any" value="0.9"></label>
@@ -170,6 +171,16 @@
 
     </section>
 
+    <!-- ============ SIMPLE MODE ============ -->
+    <section class="col simple-out">
+      <div class="rows" id="s-check"></div>
+      <div class="rows" id="s-buy"></div>
+      <p class="snote">Validated equations only. Controller-response I_SAT,
+        per-phase L_trans and the slew-derived L_C ceiling are omitted here
+        because they are not trustworthy at M&nbsp;&gt;&nbsp;1. N_ON is forced
+        to N (all channels firing), the worst case.</p>
+    </section>
+
   </main>
 
   <footer>
@@ -185,6 +196,7 @@
   <script src="terms.js"></script>
   <script src="charts.js"></script>
   <script src="calc.js"></script>
+  <script src="simple.js"></script>
 </body>
 
 </html>
