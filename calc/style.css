@@ -806,9 +806,22 @@ footer {
 
 /* ---- simple mode ---- */
 .simple-out { display: none; }
-body.simple .simple-out { display: block; }
+body.simple .simple-out { display: block; grid-column: 2; grid-row: 1; }
+body.simple .inputs { grid-column: 1; grid-row: 1; }
 body.simple .results { display: none; }
-body.simple .inputs label:not([data-simple]) { display: none; }
+body.simple .inputs label[data-term="m_count"],
+body.simple .inputs label[data-term="m_rpri"],
+body.simple .inputs label[data-term="nph"],
+body.simple .inputs label[data-term="rlc"],
+body.simple .inputs label[data-term="rsec"],
+body.simple .inputs label[data-term="rroute"],
+body.simple .inputs label[data-term="pcore"],
+body.simple .inputs label[data-term="tstep"],
+body.simple .inputs label[data-term="tresp"],
+body.simple .inputs label[data-term="non"],
+body.simple .inputs label[data-term="dramp"],
+body.simple .inputs label[data-term="esr"],
+body.simple .inputs label[data-term="esl"] { display: none; }
 
 .srow { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem;
   padding: .55rem 0; border-bottom: 1px solid var(--border); align-items: baseline; }
