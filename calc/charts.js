@@ -259,10 +259,12 @@
       build: function (p) {
         var hi = Math.max(p.dVac * 3, 60e-3);
         var su = EQ.slopeUpTlvr({
-          nOn: p.nOn, N: p.N, M: p.M, vin: p.vin, vout: p.vout,
+          nOn: p.nOn, N: p.N, M: p.M, k: p.k, vin: p.vin, vout: p.vout,
           Lm: p.Lm, Lc: p.Lc
         });
-        var sd = EQ.slopeDownTlvr({ N: p.N, M: p.M, vout: p.vout, Lm: p.Lm, Lc: p.Lc });
+        var sd = EQ.slopeDownTlvr({
+          N: p.N, M: p.M, k: p.k, vout: p.vout, Lm: p.Lm, Lc: p.Lc
+        });
 
         var gov = function (dv) {
           return Math.max(
@@ -319,10 +321,12 @@
       build: function (p) {
         var hi = Math.max(p.iStep * 2, 100);
         var su = EQ.slopeUpTlvr({
-          nOn: p.nOn, N: p.N, M: p.M, vin: p.vin, vout: p.vout,
+          nOn: p.nOn, N: p.N, M: p.M, k: p.k, vin: p.vin, vout: p.vout,
           Lm: p.Lm, Lc: p.Lc
         });
-        var sd = EQ.slopeDownTlvr({ N: p.N, M: p.M, vout: p.vout, Lm: p.Lm, Lc: p.Lc });
+        var sd = EQ.slopeDownTlvr({
+          N: p.N, M: p.M, k: p.k, vout: p.vout, Lm: p.Lm, Lc: p.Lc
+        });
         var a = sweep(1, hi, 80, function (i) {
           return EQ.coutRequired({ iStep: i, slope: su, dVac: p.dVac, rLL: p.rLL }) * 1e6;
         });
@@ -342,7 +346,6 @@
             { label: "Controller delay (IFX Eq. 32)", unit: "\u00B5F", values: c.ys, axis: "left", dash: true }
           ],
           marker: { value: p.iStep, label: "chosen" },
-          limit: { value: NaN, label: "" },
           leftLabel: "Required C_OUT (\u00B5F)"
         };
       }
@@ -379,8 +382,13 @@
             vin: v, vout: p.vout, Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
           });
         });
+        // Physical stress, matching solve(): all nPhys secondaries sit in series
+        // and each of the nOn channels drives M stages. Feeding the collapsed
+        // values here understates the real voltage by exactly M.
         var b = sweep(4.25, 16, 90, function (v) {
-          return EQ.vLcMax({ nOn: p.nOn, vin: v, N: p.N, vout: p.vout });
+          return EQ.vLcMax({
+            nOn: p.nOn * p.M, vin: v, N: p.nPhys, vout: p.vout
+          });
         });
         return {
           x: { label: "Input voltage V_IN (V)", unit: "V", values: a.xs },
@@ -468,32 +476,41 @@
         "continuous rating. Real headroom comes from the datasheet thermal " +
         "derating curve at your ambient and airflow.",
       build: function (p) {
-        var hi = Math.max(p.iTdc * 2, p.N * 90 * 1.15);
+        var hi = Math.max(p.iTdc * 2, p.nPhys * 90 * 1.15);
         var D = EQ.dutyCycle(p.vin, p.vout);
         var iLc = EQ.iLcRipple({
           k: p.k, N: p.N, M: p.M, D: D, vin: p.vin, vout: p.vout,
           Lc: p.Lc, Lm: p.Lm, fsw: p.fsw
         });
         var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
-        var iPh = EQ.iPhaseRipple(iMag, p.k, iLc);
 
-        var a = sweep(0, hi, 80, function (i) { return i / p.N; });
+        // PER-STAGE throughout, matching solve(): saturation and FET RMS are
+        // per-device checks, so they need the stageSplit figures and the
+        // physical stage count, not the PWM-pair totals and the channel count.
+        // Ripple does not depend on load, so the split is computed once.
+        var stRip = EQ.stageSplit({
+          iPhDC: 0, iMagPair: iMag, iLc: iLc, k: p.k, M: p.M
+        }).iPh;
+
+        var a = sweep(0, hi, 80, function (i) { return i / p.nPhys; });
         var b = sweep(0, hi, 80, function (i) {
-          return EQ.iSatTlvr({ iOutMax: i, N: p.N, dIph: iPh });
+          return EQ.iSatTlvr({ iOutMax: i, N: p.nPhys, dIph: stRip });
         });
         var c = sweep(0, hi, 80, function (i) {
-          var dc = i / p.N;
-          return dc > 0 ? EQ.iRmsLowSide({ iPhDC: dc, D: D, dIph: iPh }) : 0;
+          var dc = i / p.nPhys;
+          return dc > 0 ? EQ.iRmsLowSide({ iPhDC: dc, D: D, dIph: stRip }) : 0;
         });
         return {
           x: { label: "Thermal design current I_TDC (A)", unit: "A", values: a.xs },
           series: [
-            { label: "Per-phase DC", unit: "A", values: a.ys, axis: "left" },
+            { label: "Per-stage DC", unit: "A", values: a.ys, axis: "left" },
             { label: "Transformer I_sat needed", unit: "A", values: b.ys, axis: "left" },
             { label: "Low-side FET RMS", unit: "A", values: c.ys, axis: "left", dash: true }
           ],
           marker: { value: p.iTdc, label: "chosen" },
-          limit: { value: p.N * 90, label: "device abs max" },
+          // 90 A is the TDA22594A per-device figure, so it scales with the
+          // physical stage count, not the PWM channel count.
+          limit: { value: p.nPhys * 90, label: "device abs max" },
           leftLabel: "Current (A)"
         };
       }
@@ -576,7 +593,6 @@
       build: function (p) {
                 var lo = 40e-9, hi = Math.max(p.LcRaw * 3, 400e-9);
         var D = EQ.dutyCycle(p.vin, p.vout);
-        var iMag = EQ.iMagRipple({ vin: p.vin, Lm: p.Lm, fsw: p.fsw, D: D });
 
         // Axis in as-typed L_C; equations want the M-scaled value.
         var a = sweep(lo, hi, 80, function (LcRaw) {
@@ -587,7 +603,7 @@
         });
         var b = sweep(lo, hi, 80, function (LcRaw) {
           var s = EQ.slopeUpTlvr({
-            nOn: p.nOn, N: p.N, M: p.M, vin: p.vin,
+            nOn: p.nOn, N: p.N, M: p.M, k: p.k, vin: p.vin,
             vout: p.vout, Lm: p.Lm, Lc: LcRaw / p.M
           });
           return EQ.coutRequired({
@@ -613,8 +629,7 @@
                     marker: { value: p.LcRaw * 1e9, label: "chosen" },
           limit: { value: lcMax * p.M * 1e9, label: "slew limit" },
           leftLabel: "Ripple (A)",
-          rightLabel: "C_OUT (\u00B5F)",
-          _iMag: iMag
+          rightLabel: "C_OUT (\u00B5F)"
         };
       }
     },

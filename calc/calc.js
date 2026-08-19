@@ -78,8 +78,47 @@
     p.LmRaw = s.LmRaw;      // as typed — for chart markers and axis ranges
     p.LcRaw = s.LcRaw;
     p.nPhys = s.nPhys;
-    $("nph").value = p.N;          // derived display
+    // derived display — leave the field alone rather than writing NaN into it
+    // while the module definition is mid-edit
+    if (isFinite(p.N)) $("nph").value = p.N;
     return p;
+  }
+
+  /* ---- input validation ----
+     Everything downstream assumes a physically realisable operating point. Left
+     ungated, a zero or inverted input produces NaN or Infinity, eng()/fx()
+     render that as an em dash, and the pass/fail chips read it as a failure —
+     so a broken input looks exactly like a failed design. Report the input
+     instead of computing on it. Returns [] when the design is solvable.      */
+  function validate(p) {
+    var e = [];
+    function bad(cond, msg) { if (cond) e.push(msg); }
+
+    bad(!(p.vin > 0), "Input voltage must be above 0 V.");
+    bad(!(p.vout > 0), "Output voltage must be above 0 V.");
+    bad(p.vin > 0 && p.vout > 0 && p.vout >= p.vin,
+      "Output voltage must be below input voltage — this is a buck converter.");
+    bad(!(p.fsw > 0), "Switching frequency must be above 0.");
+    bad(!(p.Lm > 0), "Magnetizing inductance L_M must be above 0.");
+    bad(!(p.Lc > 0), "Compensating inductance L_C must be above 0.");
+    bad(!(p.k > 0 && p.k <= 1), "Coupling coefficient k must be above 0 and at most 1.");
+    bad(!(p.Cout > 0), "Planned C_OUT must be above 0.");
+    bad(!(p.dVac > 0), "Allowed AC deviation must be above 0.");
+    bad(!(p.tStep > 0), "Step duration must be above 0.");
+    bad(!(p.dRamp > 0 && p.dRamp <= 1), "Ramp duty cycle must be above 0 and at most 1.");
+
+    // Module definition. M = stages / PWM channels must be a whole number of
+    // stages sharing each channel, or Infineon's dual-phase collapse is
+    // meaningless. applyDualPhase silently forces M = 1 otherwise.
+    bad(!(p.nStages >= 1), "Power stages per module x modules chained must be at least 1.");
+    bad(!(p.nPwm >= 1), "PWM channels per module x modules chained must be at least 1.");
+    bad(p.nStages >= 1 && p.nPwm >= 1 && p.nPwm > p.nStages,
+      "PWM channels cannot exceed power stages — each channel drives at least one stage.");
+    bad(p.nStages >= 1 && p.nPwm >= 1 && p.nPwm <= p.nStages &&
+      Math.abs(p.nStages / p.nPwm - Math.round(p.nStages / p.nPwm)) > 1e-9,
+      "Power stages must divide evenly among PWM channels — " + p.nStages +
+      " stages on " + p.nPwm + " channels gives a fractional M.");
+    return e;
   }
 
   /* ---- run every equation ---- */
@@ -188,7 +227,6 @@
       row("fhf", "L_C excitation freq", eng(o.fHF, "Hz", 2), "f_HF = N x f_SW") +
       row("iphdc", "Per-phase DC current", fx(o.iPhDC, 1) + " A", "I_TDC / N");
 
-    var ripplePct = (o.iPh / o.iPhDC) * 100;
     $("r-ripple").innerHTML =
       row("imagrip", "Magnetizing ripple", fx(o.iMag, 2) + " A", "IFX Eq. 13") +
       row("lct", "Effective loop L (L_CT)", eng(o.Lct, "H", 1), "REN, (1-k^2)xL_MxN + L_C") +
@@ -210,6 +248,10 @@
     var gainDn = o.slDn / o.slDnBuck;
     var coutOk = p.Cout >= o.coutNeed;
     var lcOk = p.Lc <= o.lcMax;
+    // Infinity is a real answer here, not missing data: L_M alone already meets
+    // the slew target, so no value of L_C violates it. Say that rather than
+    // printing an em dash beside a pass chip. See AUDIT-math.md section 4.2.
+    var lcFree = !isFinite(o.lcMax);
 
     $("r-trans").innerHTML =
       row("ltrans", "Transient L (regulator)", eng(o.lTrans, "H", 1), "IFX Eq. 29 on L_CT") +
@@ -223,8 +265,12 @@
       row("coutdelay", "C_OUT for controller delay", eng(o.coutDly, "F", 2), "IFX Eq. 32, on the TI Eq. 4 budget") +
       row("coutgov", "C_OUT governing value", eng(o.coutNeed, "F", 2), "max of the three",
         { ok: coutOk, label: coutOk ? "planned OK" : "short" }) +
-      row("lcmax", "Max L_C for slew target", eng(o.lcMax, "H", 1), "IFX Eq. 31",
-        { ok: lcOk, label: lcOk ? "L_C OK" : "L_C too large" });
+      // lcMaxFromSlew returns the M-scaled value; L_C is typed unscaled, so
+      // report it in the same units the input box uses.
+      row("lcmax", "Max L_C for slew target",
+        lcFree ? "no upper limit" : eng(o.lcMax * p.M, "H", 1),
+        lcFree ? "IFX Eq. 31 — L_M alone meets the slew target" : "IFX Eq. 31",
+        { ok: lcOk, label: lcFree ? "unconstrained" : (lcOk ? "L_C OK" : "L_C too large") });
 
     $("r-limits").innerHTML =
       row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "IFX Eq. 50 — scales with t_RESP") +
@@ -283,7 +329,6 @@
         o.textContent = "Sweep " + ((TERMS[t] && TERMS[t].t) || t);
         sel.appendChild(o);
       });
-      void 0;
       if (!sel.options.length) { sel.parentNode.hidden = true; return; }
       sel.addEventListener("change", drawLive);
     });
@@ -300,8 +345,25 @@
     });
   }
 
+  /* Replace every results panel with the reason the design cannot be solved,
+     and blank the charts, so nothing stale or fabricated stays on screen. */
+  function renderErrors(errs) {
+    var h = '<div class="rows-error"><strong>Cannot compute this design.</strong><ul>';
+    for (var i = 0; i < errs.length; i++) h += "<li>" + errs[i] + "</li>";
+    h += "</ul></div>";
+    ["r-op", "r-ripple", "r-trans", "r-limits", "r-module"].forEach(function (id) {
+      if ($(id)) $(id).innerHTML = h;
+    });
+    Object.keys(LIVE).forEach(function (key) {
+      var plot = $(LIVE[key].plot);
+      if (plot) plot.innerHTML = "";
+    });
+  }
+
   function update() {
     var p = applyDualPhase(readInputs());
+    var errs = validate(p);
+    if (errs.length) { renderErrors(errs); return; }
     render(p, solve(p));
     drawLive();
   }
@@ -310,7 +372,8 @@
 
   window.TLVR = {
     readInputs: function () { return applyDualPhase(readInputs()); },
-    solve: solve
+    solve: solve,
+    validate: validate
   };
 
   /* ---- tooltips ----
@@ -364,7 +427,6 @@
   tip.addEventListener("mouseenter", function () { clearTimeout(tipTimer); });
   tip.addEventListener("mouseleave", queueHide);
 
-  var resultsCol = document.querySelector(".results");
   // capture phase already catches .results and any nested scroller
   window.addEventListener("scroll", hideTip, true);
 
@@ -431,6 +493,12 @@
       if (v[IDS[i]] !== undefined) $(IDS[i]).value = v[IDS[i]];
     }
     update();
+    // Assigning .value does not fire an input event, and simple mode listens
+    // for one. Without this, loading a preset or a JSON design while simple
+    // mode is showing leaves the previous design's numbers on screen.
+    if (window.TLVRSimple && document.body.classList.contains("simple")) {
+      window.TLVRSimple.render();
+    }
   }
 
   $("preset").addEventListener("change", function () {
@@ -528,6 +596,8 @@
       catch (err) { alert("That file is not a valid design JSON."); }
     };
     r.readAsText(f);
+    // Clear it, or picking the same file twice fires no change event.
+    e.target.value = "";
   });
 
   /* ---- theme ---- */
