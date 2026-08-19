@@ -139,7 +139,12 @@
     });
 
     o.iSat = EQ.iSatLcNeeded({ tResp: p.tResp, nOn: p.nOn, vin: p.vin, N: p.N, vout: p.vout, Lc: p.Lc });
-    o.vLc = EQ.vLcMax({ nOn: p.nOn, vin: p.vin, N: p.N, vout: p.vout });
+    // Physical stress, not the M-collapsed model value. All nPhys secondaries
+    // sit in series in the loop and nOn PWM channels drive M stages each, so
+    // the real voltage is M times what the collapsed N would report.
+    o.vLc = EQ.vLcMax({
+      nOn: p.nOn * p.M, vin: p.vin, N: p.nPhys, vout: p.vout
+    });
     o.tau = EQ.tauLc({ Lc: p.Lc, rLc: p.rLc, rSec: p.rSec, N: p.N, rRoute: p.rRoute });
     o.pLc = EQ.pLcLoop({
       iRms: o.iRms, rLc: p.rLc, rSec: p.rSec, N: p.N,
@@ -435,6 +440,71 @@
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "tlvr-design.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  /* ---- export inputs + computed results as readable text ---- */
+  $("exportBtn").addEventListener("click", function () {
+    var p = readInputs(), o = compute(p), L = [];
+    function f(v, d) {
+      return (typeof v === "number" && isFinite(v)) ? v.toFixed(d === undefined ? 3 : d) : String(v);
+    }
+
+    L.push("TLVR design report");
+    L.push("Generated " + new Date().toISOString());
+    L.push("");
+    L.push("== INPUTS (as typed) ==");
+    for (var i = 0; i < IDS.length; i++) L.push("  " + IDS[i] + " = " + $(IDS[i]).value);
+
+    L.push("");
+    L.push("== TOPOLOGY ==");
+    L.push("  physical stages  " + p.nPhys);
+    L.push("  PWM channels N   " + p.N);
+    L.push("  M (stages/PWM)   " + p.M);
+    L.push("  L_M as typed     " + f(p.LmRaw * 1e9, 1) + " nH  -> model " + f(p.Lm * 1e9, 1) + " nH");
+    L.push("  L_C as typed     " + f(p.LcRaw * 1e9, 1) + " nH  -> model " + f(p.Lc * 1e9, 1) + " nH");
+    L.push("  duty cycle D     " + f(o.D, 4));
+    L.push("  L_CT effective   " + f(o.lTrans * 1e9, 1) + " nH");
+
+    L.push("");
+    L.push("== STEADY-STATE RIPPLE ==");
+    L.push("  magnetizing      " + f(o.iMag, 2) + " A");
+    L.push("  loop I_LC        " + f(o.iLc, 2) + " A   (RMS " + f(o.iRms, 2) + " A)");
+    L.push("  per-phase        " + f(o.iPh, 2) + " A");
+    L.push("  summed output    " + f(o.iOut, 2) + " A");
+    L.push("  V_OUT ripple     " + f(o.vRip * 1e3, 2) + " mV");
+
+    L.push("");
+    L.push("== PER-STAGE CURRENTS ==");
+    L.push("  DC pedestal      " + f(o.st.iDC, 1) + " A");
+    L.push("  ripple           " + f(o.st.iPh, 2) + " A");
+    L.push("  peak             " + f(o.stPk, 1) + " A   (rated " + p.mIrated + " A)");
+    L.push("  RMS              " + f(o.stRms, 1) + " A");
+    L.push("  I_SAT needed     " + f(o.iSatNeed, 1) + " A   (device " + p.mIsat + " A)");
+
+    L.push("");
+    L.push("== TRANSIENT ==");
+    L.push("  slope up         " + f(o.slUp / 1e6, 2) + " A/us   (buck " + f(o.slUpBuck / 1e6, 2) + ")");
+    L.push("  slope down       " + f(Math.abs(o.slDn) / 1e6, 2) + " A/us   (buck " + f(Math.abs(o.slDnBuck) / 1e6, 2) + ")");
+    L.push("  C_OUT step up    " + f(o.coutUp * 1e6, 0) + " uF");
+    L.push("  C_OUT release    " + f(o.coutDn * 1e6, 0) + " uF");
+    L.push("  C_OUT delay      " + f(o.coutDly * 1e6, 0) + " uF");
+    L.push("  C_OUT GOVERNING  " + f(o.coutNeed * 1e6, 0) + " uF   (planned " + f(p.Cout * 1e6, 0) + " uF)"
+      + (o.coutNeed > p.Cout ? "   *** SHORT ***" : "   ok"));
+    L.push("  L_C max (slew)   " + f(o.lcMax * p.M * 1e9, 1) + " nH");
+
+    L.push("");
+    L.push("== L_C LOOP ==");
+    L.push("  peak voltage     " + f(o.vLc, 1) + " V   (V_IN " + p.vin + " V)");
+    L.push("  I_SAT needed     " + f(o.iSat, 1) + " A");
+    L.push("  decay tau        " + f(o.tau * 1e6, 2) + " us");
+    L.push("  loop loss        " + f(o.pLc, 2) + " W");
+
+    var blob = new Blob([L.join("\n")], { type: "text/plain" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "tlvr-report.txt";
     a.click();
     URL.revokeObjectURL(a.href);
   });

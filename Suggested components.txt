@@ -1,6 +1,6 @@
 - Inductor:
    - SLV9080-101KED (Coilcraft)
    - TLVR1105T-R10Y (Bourns)
-   - CSHN100760 (Codaca)
+   - CSHN100760-82NN (Codaca)
 
 - Chip: TDA22594A
