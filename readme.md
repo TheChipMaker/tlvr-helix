@@ -640,6 +640,52 @@ Still on bare L_C, deliberately: `lcMaxFromSlew` (IFX Eq. 31), `iLcTransOn` /
 are published that way and there is no vendor counterpart to defer to. Revisit as
 a group, not piecemeal.
 
+### The one place a published equation is read against a different budget
+
+`coutMinDelay` implements IFX Eq. 32, `C_out ≥ t_Delay · ΔI_LoadStep / dV_out`.
+Infineon writes that denominator as a bare `dV_out` and does not model a load
+line anywhere in the application note. **The calculator reads it as the same
+total excursion TI Eq. 4 and Eq. 5 use, `dV_ac + R_LL × I_STEP`.**
+
+The reason is that `solve()` takes `Math.max()` of three capacitance criteria —
+step up, load release, controller delay — and two of them already divided by
+`dV_ac + R_LL × I_STEP`. Comparing criteria measured against different voltage
+budgets is not meaningful. Physically the load line is adaptive voltage
+positioning: the regulation target itself moves down by `R_LL × I_STEP` on a load
+step, so the total allowed droop is the AC window *plus* that shift, and all
+three criteria are measuring the same droop against the same window.
+
+This is an instantiation of Infineon's `dV_out`, not a contradiction of it — but
+it is the one point where following the source literally and following it
+consistently diverge, so it is written down here rather than left in a comment.
+
+- **At `R_LL = 0` it is bit-identical to Eq. 32 as published**, which covers all
+  three shipped presets. Nothing in §7's regression table moved.
+- At `R_LL = 0.15 mΩ` and `I_STEP = 200 A` — a 60 mV window against 30 mV of AC
+  budget — the delay criterion drops from 1333 µF to 667 µF.
+
+If a future reader wants the literal reading back, it is one argument: drop
+`rLL` from the `coutMinDelay` call in `solve()`. See `AUDIT-math.md` §4.3.
+
+### Two more collapsed-units bugs of the same class
+
+§7's peak-L_C-voltage note below describes a quantity being displayed in
+M-collapsed units where the user types unscaled values. That pattern turned up
+twice more in the audit, and it is now the single most repeated defect in this
+project's history:
+
+- **`Max L_C for slew target` was printed raw.** `lcMaxFromSlew` returns the
+  M-scaled value; on the Helix cell the row read **292.5 nH** against a typed
+  `L_C` of 180 nH, inviting a 60% oversize the pass/fail chip would then reject.
+  The export report and the `lc` chart's limit line both already multiplied by
+  `M` — three consumers, two correct. Now multiplied in `render()` too. The chip
+  itself was always right: it compares `p.Lc` to `o.lcMax`, both in model units.
+- **The `vin` chart's peak L_C voltage** was still collapsed after the fix below
+  was applied to `solve()` — see the divergence list in §3.
+
+The lesson is in §9: a quantity shown in both a results row and a chart has **two
+or three call sites**, and fixing one is not fixing the bug.
+
 ### The L_C saturation floor now uses Infineon, not TI
 
 `iSatLcNeeded` (TI Eq. 22) has been **superseded by `iLcTransOn` (IFX Eq. 50)**,
