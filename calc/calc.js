@@ -81,6 +81,19 @@
     // derived display — leave the field alone rather than writing NaN into it
     // while the module definition is mid-edit
     if (isFinite(p.N)) $("nph").value = p.N;
+
+    // N_ON counts PWM CHANNELS fired in the step, so it cannot exceed the
+    // channel count. Unclamped it inflates the transient slope and the peak
+    // L_C voltage with no warning: on the Helix cell, entering 4 for "all four
+    // chips firing" gave 93.0 V and 1533 A/us against the true 45.0 V and
+    // 742 A/us. Correct the field visibly when it is over, but leave a blank
+    // or mid-edit value alone so the input stays usable.
+    p.nOn = Math.round(p.nOn);
+    if (!(p.nOn >= 1)) p.nOn = 1;
+    if (isFinite(p.N) && p.nOn > p.N) {
+      p.nOn = p.N;
+      $("non").value = p.N;
+    }
     return p;
   }
 
@@ -200,12 +213,15 @@
 
   /* ---- rendering ----
      row(term, name, value, ref, verdict)
-     verdict: undefined | {ok:bool, label:string}                        */
+     verdict: undefined | {ok:bool, label:string} | {na:true, label:string}
+     na is not a verdict but a caution: the equation is sourced, but one of its
+     inputs or its M-scaling is unconfirmed, so the number is not authoritative
+     and must not be shown as if it were.                                 */
   function row(term, name, value, ref, verdict) {
     var chip = "";
     var cls = "";
     if (verdict) {
-      cls = verdict.ok ? " ok" : " no";
+      cls = verdict.na ? " na" : (verdict.ok ? " ok" : " no");
       chip = '<span class="chip' + cls + '">' + verdict.label + "</span>";
     }
     return '<div class="row">' +
@@ -255,7 +271,8 @@
 
     $("r-trans").innerHTML =
       row("ltrans", "Transient L (regulator)", eng(o.lTrans, "H", 1), "IFX Eq. 29 on L_CT") +
-      row("ltransph", "Transient L (per phase)", eng(o.lTransPh, "H", 1), "REN, L_CT\u00B7L_M/(L_C+N\u00B7L_M)") +
+      row("ltransph", "Transient L (per phase)", eng(o.lTransPh, "H", 1), "REN, L_CT\u00B7L_M/(L_C+N\u00B7L_M)",
+        p.M > 1 ? { na: true, label: "extrapolated at M = " + p.M } : undefined) +
       row("slopeup", "Rising I_SUM slope", eng(o.slUp, "A/s", 2), "TI Eq. 18",
         { ok: gainUp > 1, label: fx(gainUp, 2) + "x buck" }) +
       row("slopedn", "Falling I_SUM slope", eng(o.slDn, "A/s", 2), "TI Eq. 20",
@@ -273,7 +290,8 @@
         { ok: lcOk, label: lcFree ? "unconstrained" : (lcOk ? "L_C OK" : "L_C too large") });
 
     $("r-limits").innerHTML =
-      row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "IFX Eq. 50 — scales with t_RESP") +
+      row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "IFX Eq. 50 — scales with t_RESP",
+        { na: true, label: "t_RESP unconfirmed" }) +
       row("vlcmax", "Peak L_C voltage", fx(o.vLc, 1) + " V", "TI Eq. 24",
         { ok: o.vLc <= p.vin, label: o.vLc > p.vin ? "exceeds V_IN" : "under V_IN" }) +
       row("taulc", "L_C loop time constant", eng(o.tau, "s", 2), "IFX Eq. 57 (= TI Eq. 23)") +
@@ -297,7 +315,8 @@
           "TI Eq. 24, all stages on \u2014 worst case",
           { ok: o.vSecPeak <= 100, label: o.vSecPeak > 100 ? "check rating" : "under 100 V" }) +
       row("m_imon", "IMON summing resistor", fx(o.rImon, 0) + " \u2126",
-          "1 k\u2126 / M \u2014 TDA22594A sources 5 \u00B5A/A") +
+          "1 k\u2126 / M \u2014 TDA22594A sources 5 \u00B5A/A",
+          p.M > 1 ? { na: true, label: "scaling not vendor-specified" } : undefined) +
       row("m_ppri", "Primary loss per stage", fx(o.pPri, 2) + " W",
           "I_rms\u00B2 \u00D7 R_pri");
   }
@@ -472,7 +491,9 @@
             vin: 12, vout: 0.75, fsw: 600, m_stages: 4, m_pwm: 2, m_count: 1,
       m_isat: 80, m_irated: 60, m_rpri: 0.18, itdc: 240, k: 0.98, lm: 150, lc: 180,
       rlc: 0.4, rsec: 0.3, rroute: 0.5, pcore: 0.2, istep: 200, tstep: 500,
-      dvac: 30, rll: 0, tresp: 1, non: 4, dramp: 0.9, tdelay: 200, cout: 5000
+      // non = 2: four stages on two PWM channels, so two channels is all there
+      // is to fire. This preset previously shipped non = 4 against N = 2.
+      dvac: 30, rll: 0, tresp: 1, non: 2, dramp: 0.9, tdelay: 200, cout: 5000
     },
     ti: {
             vin: 12, vout: 0.8, fsw: 600, m_stages: 4, m_pwm: 4, m_count: 1,

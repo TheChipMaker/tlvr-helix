@@ -15,8 +15,8 @@ inputs or stale state; **S3** cosmetic, dead code, or robustness.
 
 | | count |
 |---|---|
-| Issues found | 14 |
-| Fixed in this pass | 13 |
+| Issues found | 16 (14 in Pass 2, 2 in Pass 3) |
+| Fixed | 15 |
 | Recorded, not changed | 1 |
 | Verified clean (no change needed) | 6 areas |
 
@@ -311,3 +311,67 @@ whole premise is that it runs from `file://` with nothing installed.
 - **`calc/calc.js`** — C5, C6 (`validate` + `renderErrors` + gate), C9, C10, C11, C12, C13.
 - **`calc/simple.js`** — C6 (shared gate), C7, C8.
 - **`calc/style.css`** — `.rows-error` rule for C6.
+
+---
+
+## Pass 3 addendum
+
+### C15 (S1). `non` accepted values above the PWM channel count
+
+The readme flagged this; it was still live, and **the shipped `helix` preset was itself in
+the broken state** — `non: 4` against `N = 2`, so the default screen was wrong before the
+user touched anything.
+
+`non` counts PWM channels, but on a cell running several stages per channel the obvious
+reading is the chip count. Entering 4 for "all four chips firing" on a two-channel cell
+silently inflated two safety-relevant numbers:
+
+| Helix reference point | `non` = 4 (shipped) | `non` = 2 (true) |
+|---|---|---|
+| Peak L_C voltage | 93.0 V | **45.0 V** |
+| Rising I_SUM slope | 1533 A/µs | **742 A/µs** |
+
+The peak L_C voltage is the number that specifies inductor insulation and inter-module
+interconnect rating — readme §1 calls it "the spec most likely to be overlooked" — so
+over-reporting it by 2× is not conservative in a useful way, it is simply wrong.
+
+**Fix.** Clamp in `applyDualPhase()` once `N` is known, and write the corrected value back
+to the field so the correction is visible. A blank or mid-edit value computes with 1 and is
+left alone in the DOM, so the input stays usable — clamping to 1 on every keystroke would
+have made the field impossible to clear and retype. Preset and HTML default corrected to 2;
+`min="1"` added; the glossary entry rewritten in channels with the failure mode spelled out.
+
+**Verified.** 8 cases: over-values snap down and rewrite the field, in-range values are
+untouched, blank and zero compute with 1 without rewriting.
+
+Note this row is now the *only* consumer of `non` that matters for component rating: Pass 1
+moved the L_C saturation floor to IFX Eq. 50, which folds partial phase engagement into
+`D_ramp` and does not take a channel count at all.
+
+### C16 (S2). Unconfirmed results were presented like confirmed ones
+
+Three displayed results rest on an input or a scaling that no source confirms, and nothing
+on screen said so — a reader had to know to consult the readme.
+
+**Fix.** `row()` gained a third chip state, `{na: true, label}`, rendered amber and visually
+distinct from the green/red verdict chips. Applied to:
+
+| Row | Marker | Why |
+|---|---|---|
+| L_C saturation floor | "t_RESP unconfirmed" | scales linearly with a placeholder input |
+| Transient L (per phase) | "extrapolated at M = 2" | only when `M > 1`; no vendor dual-phase form |
+| IMON summing resistor | "scaling not vendor-specified" | only when `M > 1`; the `/M` is a design choice |
+
+The brand rule is preserved: green still only ever means pass. Amber is caution, and the
+`.val` text colour is left at the default so the chip alone carries the signal.
+
+### Files changed in Pass 3
+
+- **`calc/calc.js`** — C15 clamp in `applyDualPhase`, `helix` preset `non: 4 → 2`;
+  C16 `row()` `na` state and the three markers.
+- **`calc/index.html`** — `non` default `4 → 2`, `min="1"`.
+- **`calc/terms.js`** — `non` entry rewritten in channels.
+- **`calc/style.css`** — `.chip.na` rule, light and dark.
+
+All four harnesses re-run after Pass 3: **all pass**, and the §7 regression table is
+unchanged (nothing in it depends on `non`).

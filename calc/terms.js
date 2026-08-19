@@ -177,9 +177,14 @@ var TERMS = {
     src: "TI Eq. 22"
   },
   non: {
-    t: "Phases turned on in the step (N_ON,step)",
-    d: "How many phases the controller fires simultaneously when it detects the step. Often fewer than N_TOTAL. This term sets both the transient slope and the peak voltage stress on L_C.",
-    src: "TI Eq. 18, 22, 24"
+    t: "PWM channels turned on in the step (N_ON,step)",
+    d: "How many PWM channels the controller fires simultaneously when it detects the step. Counted in channels, not chips, and clamped to the channel count. Sets both the transient slope and the peak voltage stress on L_C.",
+    long: [
+      "This counts controller outputs, not power stages. On a cell running several stages per PWM channel the two differ, and entering the chip count instead of the channel count silently inflates the results — on the Helix cell, entering 4 for 'all four chips firing' against two channels gave 93.0 V of peak L_C voltage and 1533 A/us of slope where the true figures are 45.0 V and 742 A/us.",
+      "The field is now clamped to the channel count, since more channels cannot fire than exist. Where a stage count is genuinely needed the calculator derives it as N_ON x M internally, which is how the peak L_C voltage is computed.",
+      "The L_C saturation floor no longer depends on this input at all: Infineon Eq. 50 folds partial phase engagement into the transient duty cycle D_ramp rather than a separate channel count."
+    ],
+    src: "TI Eq. 18, 24"
   },
   dramp: {
     t: "Ramp duty cycle (D_ramp)",

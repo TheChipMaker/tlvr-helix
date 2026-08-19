@@ -408,6 +408,18 @@ legend {
   border: 1px solid rgba(239, 68, 68, .30);
 }
 
+/* Caution, not a verdict: the equation is sourced but one of its inputs or its
+   scaling is not confirmed, so the number is not authoritative. Never green. */
+.chip.na {
+  background: rgba(245, 197, 66, .12);
+  color: var(--warn-text, #8A6D1F);
+  border: 1px solid rgba(245, 197, 66, .38);
+}
+
+html[data-theme="dark"] .chip.na {
+  color: var(--warn);
+}
+
 .val.ok {
   color: var(--pass)
 }

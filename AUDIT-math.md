@@ -315,11 +315,11 @@ So there is **no under-reporting to fix** and the number is left alone. Adding I
 `k` would *lower* a safety-relevant figure by 2% while mixing two scenarios, which is the
 wrong trade. The distinction is now recorded in the function comment and the glossary.
 
-Cross-check of the physical-units fix the readme records: with `non` correctly clamped to
-`N = 2`, TI Eq. 24 gives `(2×2)×12 − 4×0.75 = 45.0 V` and IFX Eq. 59 gives
+Cross-check of the physical-units fix the readme records: with `non` clamped to `N = 2`
+(done in Pass 3), TI Eq. 24 gives `(2×2)×12 − 4×0.75 = 45.0 V` and IFX Eq. 59 gives
 `0.98 × 4 × 11.25 = 44.1 V`. **They agree to within `k`**, which independently confirms the
-`(nOn × M) × V_IN − nPhys × V_OUT` form. The 93 V the calculator shows today is entirely
-the unclamped `non = 4` against `N = 2` — see Pass 3.
+`(nOn × M) × V_IN − nPhys × V_OUT` form. The 93 V the calculator showed before Pass 3 was
+entirely the unclamped `non = 4` against `N = 2`.
 
 ---
 
@@ -547,7 +547,28 @@ to TI Eq. 4/Eq. 5 to match the `dvac` chart.
 **`calc/terms.js`** — `isatlc`, `vlcmax`, `coutdelay`, `ltransph`, `imagrip`, `coutreq`
 updated for the new sources and the identity finding.
 
-## 11. Still open after Pass 1
+## 11. Pass 3 addendum
+
+Pass 3 clamped `non` to the PWM channel count. That changes two numbers this document
+quotes, both for the better, and neither is an equation change:
+
+| Quantity, Helix reference point | before clamp (`non` = 4 vs `N` = 2) | after |
+|---|---|---|
+| Peak L_C voltage (TI Eq. 24) | 93.0 V | **45.0 V** |
+| Rising I_SUM slope (TI Eq. 18) | 1533 A/µs | **742 A/µs** |
+
+The 45.0 V figure is the one §5.3 cross-checks against IFX Eq. 59's 44.1 V, so the clamp
+is what makes the two sources agree.
+
+The L_C saturation floor is unaffected, because §5.1's switch to IFX Eq. 50 had already
+removed that row's dependence on `non`. Under the old TI Eq. 22 it would have moved
+517 A → 250 A.
+
+Every table in §7 is unchanged: none of those quantities depends on `non`. Re-verified
+after Pass 3 — the regression harness, the chart-builder finiteness sweep and the
+chart-vs-panel comparison all still pass.
+
+## 12. Still open after the audit
 
 | Item | Why it cannot be closed here |
 |---|---|
