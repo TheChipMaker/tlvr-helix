@@ -248,6 +248,65 @@
   }
 
   var CHARTS = {
+    dvac: {
+      note: "Required capacitance against the AC deviation budget. The curves " +
+        "are hyperbolas, so the cost of a tighter budget accelerates: the last " +
+        "few millivolts are far more expensive than the first few. The release " +
+        "curve sits above the step-up curve because a load release is driven " +
+        "only by N x V_OUT. Note that a non-zero load line shifts every curve " +
+        "left by R_LL x I_STEP, which is capacitance you get for free. The red " +
+        "line marks the tightest budget your planned C_OUT can actually hold.",
+      build: function (p) {
+        var hi = Math.max(p.dVac * 3, 60e-3);
+        var su = EQ.slopeUpTlvr({
+          nOn: p.nOn, N: p.N, M: p.M, vin: p.vin, vout: p.vout,
+          Lm: p.Lm, Lc: p.Lc
+        });
+        var sd = EQ.slopeDownTlvr({ N: p.N, M: p.M, vout: p.vout, Lm: p.Lm, Lc: p.Lc });
+
+        var gov = function (dv) {
+          return Math.max(
+            EQ.coutRequired({ iStep: p.iStep, slope: su, dVac: dv, rLL: p.rLL }),
+            EQ.coutRequired({ iStep: p.iStep, slope: sd, dVac: dv, rLL: p.rLL }),
+            EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: dv })
+          );
+        };
+
+        var a = sweep(2e-3, hi, 80, function (dv) {
+          return EQ.coutRequired({ iStep: p.iStep, slope: su, dVac: dv, rLL: p.rLL }) * 1e6;
+        });
+        var b = sweep(2e-3, hi, 80, function (dv) {
+          return EQ.coutRequired({ iStep: p.iStep, slope: sd, dVac: dv, rLL: p.rLL }) * 1e6;
+        });
+        var c = sweep(2e-3, hi, 80, function (dv) {
+          return EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: dv }) * 1e6;
+        });
+
+        // Tightest budget the planned C_OUT can still satisfy: scan for the
+        // smallest dV_ac where the governing requirement drops under C_OUT.
+        var dvMin = NaN, j, dv;
+        for (j = 0; j <= 400; j++) {
+          dv = 2e-3 + ((hi - 2e-3) / 400) * j;
+          if (gov(dv) <= p.Cout) { dvMin = dv; break; }
+        }
+
+        return {
+          x: {
+            label: "Allowed AC deviation dV_ac (mV)", unit: "mV",
+            values: a.xs.map(function (v) { return v * 1e3; })
+          },
+          series: [
+            { label: "Step up (TI Eq. 4)", unit: "\u00B5F", values: a.ys, axis: "left" },
+            { label: "Release (TI Eq. 5)", unit: "\u00B5F", values: b.ys, axis: "left" },
+            { label: "Controller delay (IFX Eq. 32)", unit: "\u00B5F", values: c.ys, axis: "left", dash: true }
+          ],
+          marker: { value: p.dVac * 1e3, label: "chosen" },
+          limit: { value: dvMin * 1e3, label: "planned C_OUT floor" },
+          leftLabel: "Required C_OUT (\u00B5F)"
+        };
+      }
+    },
+
     coutgov: {
       note: "Three criteria, all of which must be met, so the highest line " +
         "governs. Watch where they cross: the two slope-based curves grow " +

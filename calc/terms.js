@@ -156,7 +156,15 @@ var TERMS = {
   dvac: {
     t: "Allowed AC deviation (dV_ac)",
     d: "Voltage excursion budget beyond the load-line allowance. This is the number the whole transient design is fighting for.",
-    src: "TI Eq. 1"
+    long: [
+      "The specification gives a total window, V_OUT_max minus V_OUT_min. TI Equations 4 and 5 divide that window into two parts, and the denominator they use for capacitance sizing is the sum: dV_ac + R_LL x I_STEP. Understanding which part is which is the whole point of this term.",
+      "The load-line part, R_LL x I_STEP, is free. With adaptive voltage positioning the rail is deliberately set to V_0 - R_LL x I_OUT, so when load current rises the output is supposed to sit lower. That shift is the new target, not an error, and it costs no capacitance. The AC part, dV_ac, is what you must buy: it is the dynamic excursion beyond that new target, caused by I_SUM being unable to slew instantly while the capacitors alone supply the charge deficit.",
+      "With zero load line the whole window is AC budget, and TI notes that overshoot and undershoot then each become fifty percent of the total specification. That is the hardest case and the one this calculator defaults to unless you enter an R_LL.",
+      "Rearranging TI Equation 1 gives dV_ac = (1/2 x I_STEP squared / Slope) / C_OUT - R_LL x I_STEP, which exposes the only three levers available. Steepen the slope, which is exactly what the compensating inductor exists to do. Add capacitance, which costs area and money. Or widen the load line, if the load permits it. Nothing else in the design touches this number.",
+      "Note that I_STEP enters squared while dV_ac enters linearly. Doubling the step quadruples the required capacitance, but halving the deviation budget only doubles it. This asymmetry is why the transient specification, rather than the ripple specification, almost always sizes a TLVR output filter.",
+      "The chart shows required capacitance falling as the budget is widened. The curve is a hyperbola, so tightening a budget that is already tight is expensive: the last few millivolts cost far more capacitance than the first few."
+    ],
+    src: "TI Eq. 1, 2, 3, 4, 5"
   },
   rll: {
     t: "Load line (R_LL)",
