@@ -177,9 +177,14 @@ var TERMS = {
     src: "TI Eq. 22"
   },
   non: {
-    t: "Phases turned on in the step (N_ON,step)",
-    d: "How many phases the controller fires simultaneously when it detects the step. Often fewer than N_TOTAL. This term sets both the transient slope and the peak voltage stress on L_C.",
-    src: "TI Eq. 18, 22, 24"
+    t: "PWM channels turned on in the step (N_ON,step)",
+    d: "How many PWM channels the controller fires simultaneously when it detects the step. Counted in channels, not chips, and clamped to the channel count. Sets both the transient slope and the peak voltage stress on L_C.",
+    long: [
+      "This counts controller outputs, not power stages. On a cell running several stages per PWM channel the two differ, and entering the chip count instead of the channel count silently inflates the results — on the Helix cell, entering 4 for 'all four chips firing' against two channels gave 93.0 V of peak L_C voltage and 1533 A/us of slope where the true figures are 45.0 V and 742 A/us.",
+      "The field is now clamped to the channel count, since more channels cannot fire than exist. Where a stage count is genuinely needed the calculator derives it as N_ON x M internally, which is how the peak L_C voltage is computed.",
+      "The L_C saturation floor no longer depends on this input at all: Infineon Eq. 50 folds partial phase engagement into the transient duty cycle D_ramp rather than a separate channel count."
+    ],
+    src: "TI Eq. 18, 24"
   },
   dramp: {
     t: "Ramp duty cycle (D_ramp)",
@@ -259,7 +264,7 @@ var TERMS = {
   imagrip: {
     t: "Magnetizing ripple (dI_mag,ph)",
     d: "The plain-buck component of per-phase ripple, set only by L_M, V_IN and D. Target roughly 30-40% of the per-phase DC current.",
-    src: "IFX Eq. 13"
+    src: "IFX Eq. 4 (Eq. 13 is the combined form)"
   },
   iphrip: {
     t: "Total phase ripple (dI_ph,pk-pk)",
@@ -294,12 +299,16 @@ var TERMS = {
   coutreq: {
     t: "Required C_OUT",
     d: "Capacitance needed to keep the excursion inside dV_ac plus the load-line allowance, given the achievable slope. Compare against your planned C_OUT.",
-    src: "TI Eq. 1"
+    src: "TI Eq. 4"
   },
   coutdelay: {
     t: "Minimum C_OUT for controller delay",
-    d: "Charge the capacitors must supply before the controller even reaches its ramp duty cycle. Usually covered by MLCCs at the load, and often the stricter of the two capacitance criteria.",
-    src: "IFX Eq. 32"
+    d: "Charge the capacitors must supply before the controller even reaches its ramp duty cycle. Usually covered by MLCCs at the load, and often the stricter of the capacitance criteria.",
+    long: [
+      "Infineon writes the denominator as dV_out and does not model a load line anywhere in the application note. This calculator reads that dV_out as the same total excursion TI Eq. 4 and Eq. 5 use, dV_ac plus R_LL times I_STEP, because all three capacitance criteria are compared with a maximum and must therefore share one budget.",
+      "At zero load line this is bit-identical to Eq. 32 as published, which covers every shipped preset. With a load line it lowers the required capacitance, because the load line genuinely widens the allowed excursion by shifting the regulation target."
+    ],
+    src: "IFX Eq. 32, on the TI Eq. 4 voltage budget"
   },
   lcmax: {
     t: "Maximum L_C for slew target",
@@ -308,13 +317,24 @@ var TERMS = {
   },
   isatlc: {
     t: "L_C saturation current needed",
-    d: "Current L_C builds during the response window. TI's wording is 'much greater than', so treat this as a floor and add real margin, or use a soft-saturating core.",
-    src: "TI Eq. 22"
+    d: "Current L_C builds during the response window. Treat it as a floor and add real margin, or use a soft-saturating core. Scales directly with t_RESP, which is an unconfirmed placeholder — read this as an upper bound, not a rating.",
+    long: [
+      "Infineon Eq. 50 gives the worst-case coupling-loop excursion during a load-step-on event as k times the response time times (D_trans x N x V_IN - N x V_OUT) over L_C. It supersedes TI Eq. 22, which is the same quantity without the coupling factor and with D_trans fixed at 1.",
+      "Infineon folds 'not every phase is fully on' into the transient duty cycle D_trans rather than into a separate N_ON count, so unlike the transient slope this result does not depend on the N_ON input at all.",
+      "The number is only as good as t_RESP, and t_RESP is currently a placeholder. Working backwards from the 52 A compensating inductor in the Renesas worked example implies something nearer 100 ns than the 1 microsecond in the preset, so this row currently reads roughly an order of magnitude high. Take the real figure from the controller datasheet or from simulation before sizing a part against it.",
+      "Infineon is explicit about the consequence of getting it wrong: if L_C saturates, the steep ramp translates into every phase, the TLVR transformers saturate too, the controller loses control and the power stage sees effectively a short."
+    ],
+    src: "IFX Eq. 50 (supersedes TI Eq. 22)"
   },
   vlcmax: {
     t: "Peak L_C voltage (dV_Lc,max)",
-    d: "N_ON x V_IN - N x V_OUT. This can exceed V_IN during a step. Not a creepage concern since it is brief, but it matters for component voltage rating and insulation.",
-    src: "TI Eq. 24"
+    d: "N_ON x V_IN - N x V_OUT, in physical units. This can exceed V_IN during a step. Not a creepage concern since it is brief, but it matters for component voltage rating and insulation.",
+    long: [
+      "This is the transient bound: the controller deliberately fires N_ON channels at once, and all physical secondaries sit in series in the loop, so the stress is (N_ON x M) x V_IN - N_phys x V_OUT rather than the phase-collapsed value.",
+      "Infineon gives a separate steady-state bound in Eq. 58 to 61: k times the larger of (N_SimOnMax x V_IN - N x V_OUT) and N x V_OUT, the second branch covering load release. That form is smaller than the transient bound in every configuration checked, including high phase count at 1.8 V where its release branch is largest, so TI Eq. 24 remains the governing number here.",
+      "Infineon notes that splitting L_C into two series parts with their common node referenced to ground halves the absolute voltage excursion and reduces PCB stress, which is worth considering at high phase count."
+    ],
+    src: "TI Eq. 24 (transient); cf. IFX Eq. 58-61 steady-state"
   },
   taulc: {
     t: "L_C loop time constant (tau_Lc)",
@@ -489,9 +509,11 @@ var TERMS = {
     t: "Transient L, per phase",
     d: "Renesas per-phase equivalent transient inductance, L_CT times L_M over L_C plus N times L_M.",
     long: [
-      "Distinct from the regulator-wide figure above, and roughly four times different at the reference operating point. The two are displayed as separate rows and must not be conflated.",
-      "Validated against the Renesas worked example at 24.3 nH."
+      "Distinct from the regulator-wide figure above by exactly the phase count. The two are displayed as separate rows and must not be conflated.",
+      "They are not two independent sources. Substituting L_CT = (1-k^2) x L_M x N + L_C into Infineon Eq. 29 collapses its denominator to N x (L_C + N x L_M), so at one stage per PWM channel this row is identically N times the regulator-wide row. Same physics, per-phase normalisation.",
+      "At more than one stage per PWM channel the two drift apart, 2.05 times instead of 2.00 on the Helix cell, because the M multiplier in L_CT enters Infineon's explicit k^2 N^2 L_M term and the Renesas (L_C + N x L_M) term asymmetrically. Neither vendor publishes a dual-phase form, so this row is unconfirmed against simulation above one stage per channel.",
+      "Validated against the Renesas worked example at 24.38 nH against their 24.3 nH."
     ],
-    src: "Renesas transient slide"
+    src: "Renesas transient slide (= N x IFX Eq. 29)"
   }
 };

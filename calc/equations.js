@@ -15,7 +15,10 @@ var EQ = {};
 EQ.dutyCycle = (vin, vout) => vout / vin;
 
 // Nsim_on_max = roundup(N*D)   [IFX Eq. 7]
-EQ.nSimOnMax = (N, D) => Math.max(1, Math.ceil(N * D));
+// Clamped to [1, N]: more phases than exist cannot be on together, and the
+// upper clamp keeps (N - Nsim_on_max) in Eq. 17 from going negative when a
+// typed V_OUT > V_IN pushes D above 1.
+EQ.nSimOnMax = (N, D) => Math.min(N, Math.max(1, Math.ceil(N * D)));
 
 // Nsim_on_min   [IFX Eq. 8]
 EQ.nSimOnMin = (N, D) => {
@@ -96,7 +99,9 @@ EQ.iLcRipple = ({ k, N, D, vin, vout, Lc, Lm, M, fsw, leakage = true }) => {
   return (k * (nMax * vin - N * vout) * dhf) / (Leff * fhf);
 };
 
-// dI_mag_ph = Vin/(Lm*fsw) * (1-D) * D   [IFX Eq. 13, magnetizing term]
+// dI_mag_ph = Vin/(Lm*fsw) * (1-D) * D   [IFX Eq. 4]
+// (Eq. 13 is the combined phase ripple; Eq. 4 is this term alone. Renesas'
+//  I_Mpkpk = (Vin-Vout)*Vout/(Vin*Lp*fsw) is algebraically identical.)
 EQ.iMagRipple = ({ vin, Lm, fsw, D }) => (vin / (Lm * fsw)) * (1 - D) * D;
 
 // dI_ph_pkpk = dI_mag_ph + k * dI_Lc_pkpk   [IFX Eq. 12]
@@ -132,7 +137,13 @@ EQ.lTrans = ({ Lm, Lc, k, N, M, leakage = true }) => {
 };
 
 // Per-phase equivalent transient inductance   [REN]
-// L_eq_ph = Lct * Lm / (Lc + N*Lm)   — validated: 24.3 nH on the Renesas example
+// L_eq_ph = Lct * Lm / (Lc + N*Lm)   — validated: 24.38 nH vs Renesas' 24.3 nH
+// NOT an independent second source. At M = 1 this is identically N * lTrans:
+// substituting Lct = (1-k^2)*Lm*N + Lc into IFX Eq. 29 collapses its denominator
+// to N^2*Lm + N*Lc = N*(Lc + N*Lm). Same physics, per-phase normalisation.
+// At M > 1 the two drift (2.05x instead of 2.00x on the Helix cell) because
+// lct's M multiplier enters Eq. 29's explicit k^2*N^2*Lm term and this form's
+// (Lc + N*Lm) term asymmetrically. Unconfirmed against simulation at M > 1.
 EQ.lTransPhase = ({ Lm, Lc, k, N, M }) =>
   (EQ.lct({ k, N, Lm, Lc, M }) * Lm) / (Lc + N * Lm);
 
@@ -156,19 +167,35 @@ EQ.slopeDownTlvr = ({ N, vout, Lm, Lc, k, M, leakage = true }) => {
   return EQ.slopeDownBuck({ N, vout, Lm }) - (N * (N * vout)) / Le;
 };
 
-// Cout required to hold dV during the ramp   [TI Eq. 1, rearranged]
-// dV = (1/2 * Istep^2 / Slope) / Cout  ->  Cout = 0.5*Istep^2/Slope/dV_total
-// dV_total includes the load-line allowance: dVac + Rll*Istep
-EQ.coutRequired = ({ iStep, slope, dVac, rLL }) => {
-  const dvTotal = dVac + rLL * iStep;
-  return (0.5 * (iStep * iStep)) / Math.abs(slope) / dvTotal;
-};
+// Cout required to hold dV during the ramp   [TI Eq. 4 (step up) / Eq. 5 (release)]
+// Cout = (0.5 * Istep^2 / Slope) / dV_total,  dV_total = dVac + Rll*Istep
+// The load-line term is explicit in TI Eq. 4/5; TI Eq. 1 is the same relation
+// written without it.
+EQ.coutRequired = ({ iStep, slope, dVac, rLL }) =>
+  (0.5 * (iStep * iStep)) / Math.abs(slope) / EQ.dvBudget({ dVac, rLL, iStep });
+
+// Total allowed output excursion for a load step of iStep.
+// A load line moves the regulation target by Rll*Istep, so that shift is
+// available on top of the AC window. Shared by every capacitance criterion so
+// they are comparable when max()'d against one another.
+EQ.dvBudget = ({ dVac, rLL = 0, iStep = 0 }) => dVac + rLL * iStep;
 
 // Cout to cover controller delay before reaching Dramp   [IFX Eq. 32]
-EQ.coutMinDelay = ({ tDelay, iStep, dVout }) => (tDelay * iStep) / dVout;
+// Infineon writes the denominator as dVout without defining a load line, since
+// the AN does not model one. Read here as the same total excursion TI Eq. 4/5
+// uses, because coutRequired and this are max()'d together and must share a
+// budget. Identical to bare Eq. 32 whenever Rll = 0.
+EQ.coutMinDelay = ({ tDelay, iStep, dVac, rLL = 0 }) =>
+  (tDelay * iStep) / EQ.dvBudget({ dVac, rLL, iStep });
 
 // Maximum Lc that still meets the load-step slew target   [IFX Eq. 31]
 // Lc <= k^2*N^2 / [ (dI/dt_step)/(Dramp*Vin - Vout) - N/Lm ]
+// Infinity is the CORRECT answer, not a masked divide-by-zero: Eq. 31 comes from
+// Eq. 30, dI/dt <= (Dramp*Vin - Vout)*(k^2*N^2/Lc + N/Lm). When N/Lm alone meets
+// the target the inequality holds for every positive Lc, so there is no upper
+// bound. denom < 0 is that case; denom == 0 divides to +Infinity anyway.
+// Returns the M-scaled (model) value — multiply by M to compare against a
+// typed L_C.
 EQ.lcMaxFromSlew = ({ k, N, iStep, tStep, dRamp, vin, vout, Lm }) => {
   const denom = iStep / tStep / (dRamp * vin - vout) - N / Lm;
   return denom > 0 ? (k * k * N * N) / denom : Infinity;
@@ -177,6 +204,10 @@ EQ.lcMaxFromSlew = ({ k, N, iStep, tStep, dRamp, vin, vout, Lm }) => {
 /* --- Lc component limits ------------------------------------------------ */
 
 // Isat_Lc >> tresp * (Non*Vin - N*Vout) / Lc   [TI Eq. 22]
+// SUPERSEDED by EQ.iLcTransOn (IFX Eq. 50), which is the same quantity at
+// higher source priority and adds the coupling factor k and the transient duty
+// cycle D_trans. TI Eq. 22 is the D_trans = 1 limit of Eq. 50 without the k.
+// Kept for comparison; not wired to the UI. See AUDIT-math.md.
 EQ.iSatLcNeeded = ({ tResp, nOn, vin, N, vout, Lc }) =>
   (tResp * (nOn * vin - N * vout)) / Lc;
 
@@ -185,6 +216,11 @@ EQ.tauLc = ({ Lc, rLc, rSec, N, rRoute }) =>
   Lc / (rLc + N * rSec + rRoute);
 
 // dV_Lc_max = Non*Vin - N*Vout   [TI Eq. 24]
+// TRANSIENT bound: the controller deliberately turns Non phases on at once.
+// Infineon's Eq. 58-61 give the STEADY-STATE bound instead — k*max(NsimOnMax*Vin
+// - N*Vout, N*Vout), i.e. with a coupling factor and a load-release branch. That
+// form is smaller than this one in every configuration checked (see
+// AUDIT-math.md), so TI Eq. 24 is the governing number and is kept unmodified.
 EQ.vLcMax = ({ nOn, vin, N, vout }) => nOn * vin - N * vout;
 
 // P_Lc = Irms^2 * (Rdcr_Lc + N*Rdcr_sec + Rrouting) + Pcore   [TI Eq. 26]
@@ -238,6 +274,13 @@ EQ.vOutRippleFull = ({ dIout, Cout, N, fsw, esr = 0, esl = 0 }) =>
   dIout * (1 / (8 * Cout * N * fsw) + esr + 2 * N * fsw * esl);
 
 // Worst-case L_C current excursion during a load-step-on event   [IFX Eq. 50]
+// This is the L_C saturation floor: the loop must stay in control, so I_SAT of
+// the compensating inductor has to exceed it. Supersedes TI Eq. 22.
+// Infineon folds "not every phase is fully on" into D_trans rather than into a
+// separate N_ON count, so this does NOT depend on the `non` input.
+// Per-channel vs physical: M cancels. (N/M) against (Lc/M) recovers
+// nPhys*(D_trans*Vin - Vout)/Lc_raw, so the collapsed inputs give the true
+// physical loop current. Feed the scaled N and Lc.
 EQ.iLcTransOn = ({ k, tTransOn, dTrans, N, vin, vout, Lc }) =>
   (k * tTransOn * (dTrans * N * vin - N * vout)) / Lc;
 

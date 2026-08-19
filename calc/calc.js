@@ -78,8 +78,60 @@
     p.LmRaw = s.LmRaw;      // as typed — for chart markers and axis ranges
     p.LcRaw = s.LcRaw;
     p.nPhys = s.nPhys;
-    $("nph").value = p.N;          // derived display
+    // derived display — leave the field alone rather than writing NaN into it
+    // while the module definition is mid-edit
+    if (isFinite(p.N)) $("nph").value = p.N;
+
+    // N_ON counts PWM CHANNELS fired in the step, so it cannot exceed the
+    // channel count. Unclamped it inflates the transient slope and the peak
+    // L_C voltage with no warning: on the Helix cell, entering 4 for "all four
+    // chips firing" gave 93.0 V and 1533 A/us against the true 45.0 V and
+    // 742 A/us. Correct the field visibly when it is over, but leave a blank
+    // or mid-edit value alone so the input stays usable.
+    p.nOn = Math.round(p.nOn);
+    if (!(p.nOn >= 1)) p.nOn = 1;
+    if (isFinite(p.N) && p.nOn > p.N) {
+      p.nOn = p.N;
+      $("non").value = p.N;
+    }
     return p;
+  }
+
+  /* ---- input validation ----
+     Everything downstream assumes a physically realisable operating point. Left
+     ungated, a zero or inverted input produces NaN or Infinity, eng()/fx()
+     render that as an em dash, and the pass/fail chips read it as a failure —
+     so a broken input looks exactly like a failed design. Report the input
+     instead of computing on it. Returns [] when the design is solvable.      */
+  function validate(p) {
+    var e = [];
+    function bad(cond, msg) { if (cond) e.push(msg); }
+
+    bad(!(p.vin > 0), "Input voltage must be above 0 V.");
+    bad(!(p.vout > 0), "Output voltage must be above 0 V.");
+    bad(p.vin > 0 && p.vout > 0 && p.vout >= p.vin,
+      "Output voltage must be below input voltage — this is a buck converter.");
+    bad(!(p.fsw > 0), "Switching frequency must be above 0.");
+    bad(!(p.Lm > 0), "Magnetizing inductance L_M must be above 0.");
+    bad(!(p.Lc > 0), "Compensating inductance L_C must be above 0.");
+    bad(!(p.k > 0 && p.k <= 1), "Coupling coefficient k must be above 0 and at most 1.");
+    bad(!(p.Cout > 0), "Planned C_OUT must be above 0.");
+    bad(!(p.dVac > 0), "Allowed AC deviation must be above 0.");
+    bad(!(p.tStep > 0), "Step duration must be above 0.");
+    bad(!(p.dRamp > 0 && p.dRamp <= 1), "Ramp duty cycle must be above 0 and at most 1.");
+
+    // Module definition. M = stages / PWM channels must be a whole number of
+    // stages sharing each channel, or Infineon's dual-phase collapse is
+    // meaningless. applyDualPhase silently forces M = 1 otherwise.
+    bad(!(p.nStages >= 1), "Power stages per module x modules chained must be at least 1.");
+    bad(!(p.nPwm >= 1), "PWM channels per module x modules chained must be at least 1.");
+    bad(p.nStages >= 1 && p.nPwm >= 1 && p.nPwm > p.nStages,
+      "PWM channels cannot exceed power stages — each channel drives at least one stage.");
+    bad(p.nStages >= 1 && p.nPwm >= 1 && p.nPwm <= p.nStages &&
+      Math.abs(p.nStages / p.nPwm - Math.round(p.nStages / p.nPwm)) > 1e-9,
+      "Power stages must divide evenly among PWM channels — " + p.nStages +
+      " stages on " + p.nPwm + " channels gives a fractional M.");
+    return e;
   }
 
   /* ---- run every equation ---- */
@@ -131,14 +183,20 @@
 
     o.coutUp = EQ.coutRequired({ iStep: p.iStep, slope: o.slUp, dVac: p.dVac, rLL: p.rLL });
     o.coutDn = EQ.coutRequired({ iStep: p.iStep, slope: o.slDn, dVac: p.dVac, rLL: p.rLL });
-    o.coutDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: p.dVac });
+    o.coutDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: p.dVac, rLL: p.rLL });
     o.coutNeed = Math.max(o.coutUp, o.coutDn, o.coutDly);
     o.lcMax = EQ.lcMaxFromSlew({
       k: p.k, N: p.N, iStep: p.iStep, tStep: p.tStep,
       dRamp: p.dRamp, vin: p.vin, vout: p.vout, Lm: p.Lm
     });
 
-    o.iSat = EQ.iSatLcNeeded({ tResp: p.tResp, nOn: p.nOn, vin: p.vin, N: p.N, vout: p.vout, Lc: p.Lc });
+    // L_C saturation floor. IFX Eq. 50 supersedes TI Eq. 22: same quantity,
+    // higher-priority source, and it carries k and the transient duty cycle.
+    // M cancels through (N/M against Lc/M), so the collapsed values are correct.
+    o.iSat = EQ.iLcTransOn({
+      k: p.k, tTransOn: p.tResp, dTrans: p.dRamp,
+      N: p.N, vin: p.vin, vout: p.vout, Lc: p.Lc
+    });
     // Physical stress, not the M-collapsed model value. All nPhys secondaries
     // sit in series in the loop and nOn PWM channels drive M stages each, so
     // the real voltage is M times what the collapsed N would report.
@@ -155,12 +213,15 @@
 
   /* ---- rendering ----
      row(term, name, value, ref, verdict)
-     verdict: undefined | {ok:bool, label:string}                        */
+     verdict: undefined | {ok:bool, label:string} | {na:true, label:string}
+     na is not a verdict but a caution: the equation is sourced, but one of its
+     inputs or its M-scaling is unconfirmed, so the number is not authoritative
+     and must not be shown as if it were.                                 */
   function row(term, name, value, ref, verdict) {
     var chip = "";
     var cls = "";
     if (verdict) {
-      cls = verdict.ok ? " ok" : " no";
+      cls = verdict.na ? " na" : (verdict.ok ? " ok" : " no");
       chip = '<span class="chip' + cls + '">' + verdict.label + "</span>";
     }
     return '<div class="row">' +
@@ -182,7 +243,6 @@
       row("fhf", "L_C excitation freq", eng(o.fHF, "Hz", 2), "f_HF = N x f_SW") +
       row("iphdc", "Per-phase DC current", fx(o.iPhDC, 1) + " A", "I_TDC / N");
 
-    var ripplePct = (o.iPh / o.iPhDC) * 100;
     $("r-ripple").innerHTML =
       row("imagrip", "Magnetizing ripple", fx(o.iMag, 2) + " A", "IFX Eq. 13") +
       row("lct", "Effective loop L (L_CT)", eng(o.Lct, "H", 1), "REN, (1-k^2)xL_MxN + L_C") +
@@ -204,24 +264,34 @@
     var gainDn = o.slDn / o.slDnBuck;
     var coutOk = p.Cout >= o.coutNeed;
     var lcOk = p.Lc <= o.lcMax;
+    // Infinity is a real answer here, not missing data: L_M alone already meets
+    // the slew target, so no value of L_C violates it. Say that rather than
+    // printing an em dash beside a pass chip. See AUDIT-math.md section 4.2.
+    var lcFree = !isFinite(o.lcMax);
 
     $("r-trans").innerHTML =
       row("ltrans", "Transient L (regulator)", eng(o.lTrans, "H", 1), "IFX Eq. 29 on L_CT") +
-      row("ltransph", "Transient L (per phase)", eng(o.lTransPh, "H", 1), "REN, L_CT\u00B7L_M/(L_C+N\u00B7L_M)") +
+      row("ltransph", "Transient L (per phase)", eng(o.lTransPh, "H", 1), "REN, L_CT\u00B7L_M/(L_C+N\u00B7L_M)",
+        p.M > 1 ? { na: true, label: "extrapolated at M = " + p.M } : undefined) +
       row("slopeup", "Rising I_SUM slope", eng(o.slUp, "A/s", 2), "TI Eq. 18",
         { ok: gainUp > 1, label: fx(gainUp, 2) + "x buck" }) +
       row("slopedn", "Falling I_SUM slope", eng(o.slDn, "A/s", 2), "TI Eq. 20",
         { ok: gainDn > 1, label: fx(gainDn, 2) + "x buck" }) +
-      row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2), "TI Eq. 1 \u2014 no IFX/REN equivalent") +
-      row("coutrel", "C_OUT required (release)", eng(o.coutDn, "F", 2), "TI Eq. 1, Eq. 20 slope") +
-      row("coutdelay", "C_OUT for controller delay", eng(o.coutDly, "F", 2), "IFX Eq. 32") +
+      row("coutreq", "C_OUT required (step up)", eng(o.coutUp, "F", 2), "TI Eq. 4 \u2014 no IFX/REN equivalent") +
+      row("coutrel", "C_OUT required (release)", eng(o.coutDn, "F", 2), "TI Eq. 5, Eq. 20 slope") +
+      row("coutdelay", "C_OUT for controller delay", eng(o.coutDly, "F", 2), "IFX Eq. 32, on the TI Eq. 4 budget") +
       row("coutgov", "C_OUT governing value", eng(o.coutNeed, "F", 2), "max of the three",
         { ok: coutOk, label: coutOk ? "planned OK" : "short" }) +
-      row("lcmax", "Max L_C for slew target", eng(o.lcMax, "H", 1), "IFX Eq. 31",
-        { ok: lcOk, label: lcOk ? "L_C OK" : "L_C too large" });
+      // lcMaxFromSlew returns the M-scaled value; L_C is typed unscaled, so
+      // report it in the same units the input box uses.
+      row("lcmax", "Max L_C for slew target",
+        lcFree ? "no upper limit" : eng(o.lcMax * p.M, "H", 1),
+        lcFree ? "IFX Eq. 31 — L_M alone meets the slew target" : "IFX Eq. 31",
+        { ok: lcOk, label: lcFree ? "unconstrained" : (lcOk ? "L_C OK" : "L_C too large") });
 
     $("r-limits").innerHTML =
-      row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "TI Eq. 22, needs margin above") +
+      row("isatlc", "L_C saturation floor", fx(o.iSat, 1) + " A", "IFX Eq. 50 — scales with t_RESP",
+        { na: true, label: "t_RESP unconfirmed" }) +
       row("vlcmax", "Peak L_C voltage", fx(o.vLc, 1) + " V", "TI Eq. 24",
         { ok: o.vLc <= p.vin, label: o.vLc > p.vin ? "exceeds V_IN" : "under V_IN" }) +
       row("taulc", "L_C loop time constant", eng(o.tau, "s", 2), "IFX Eq. 57 (= TI Eq. 23)") +
@@ -245,7 +315,8 @@
           "TI Eq. 24, all stages on \u2014 worst case",
           { ok: o.vSecPeak <= 100, label: o.vSecPeak > 100 ? "check rating" : "under 100 V" }) +
       row("m_imon", "IMON summing resistor", fx(o.rImon, 0) + " \u2126",
-          "1 k\u2126 / M \u2014 TDA22594A sources 5 \u00B5A/A") +
+          "1 k\u2126 / M \u2014 TDA22594A sources 5 \u00B5A/A",
+          p.M > 1 ? { na: true, label: "scaling not vendor-specified" } : undefined) +
       row("m_ppri", "Primary loss per stage", fx(o.pPri, 2) + " W",
           "I_rms\u00B2 \u00D7 R_pri");
   }
@@ -277,7 +348,6 @@
         o.textContent = "Sweep " + ((TERMS[t] && TERMS[t].t) || t);
         sel.appendChild(o);
       });
-      void 0;
       if (!sel.options.length) { sel.parentNode.hidden = true; return; }
       sel.addEventListener("change", drawLive);
     });
@@ -294,8 +364,25 @@
     });
   }
 
+  /* Replace every results panel with the reason the design cannot be solved,
+     and blank the charts, so nothing stale or fabricated stays on screen. */
+  function renderErrors(errs) {
+    var h = '<div class="rows-error"><strong>Cannot compute this design.</strong><ul>';
+    for (var i = 0; i < errs.length; i++) h += "<li>" + errs[i] + "</li>";
+    h += "</ul></div>";
+    ["r-op", "r-ripple", "r-trans", "r-limits", "r-module"].forEach(function (id) {
+      if ($(id)) $(id).innerHTML = h;
+    });
+    Object.keys(LIVE).forEach(function (key) {
+      var plot = $(LIVE[key].plot);
+      if (plot) plot.innerHTML = "";
+    });
+  }
+
   function update() {
     var p = applyDualPhase(readInputs());
+    var errs = validate(p);
+    if (errs.length) { renderErrors(errs); return; }
     render(p, solve(p));
     drawLive();
   }
@@ -304,7 +391,8 @@
 
   window.TLVR = {
     readInputs: function () { return applyDualPhase(readInputs()); },
-    solve: solve
+    solve: solve,
+    validate: validate
   };
 
   /* ---- tooltips ----
@@ -358,7 +446,6 @@
   tip.addEventListener("mouseenter", function () { clearTimeout(tipTimer); });
   tip.addEventListener("mouseleave", queueHide);
 
-  var resultsCol = document.querySelector(".results");
   // capture phase already catches .results and any nested scroller
   window.addEventListener("scroll", hideTip, true);
 
@@ -404,7 +491,9 @@
             vin: 12, vout: 0.75, fsw: 600, m_stages: 4, m_pwm: 2, m_count: 1,
       m_isat: 80, m_irated: 60, m_rpri: 0.18, itdc: 240, k: 0.98, lm: 150, lc: 180,
       rlc: 0.4, rsec: 0.3, rroute: 0.5, pcore: 0.2, istep: 200, tstep: 500,
-      dvac: 30, rll: 0, tresp: 1, non: 4, dramp: 0.9, tdelay: 200, cout: 5000
+      // non = 2: four stages on two PWM channels, so two channels is all there
+      // is to fire. This preset previously shipped non = 4 against N = 2.
+      dvac: 30, rll: 0, tresp: 1, non: 2, dramp: 0.9, tdelay: 200, cout: 5000
     },
     ti: {
             vin: 12, vout: 0.8, fsw: 600, m_stages: 4, m_pwm: 4, m_count: 1,
@@ -425,6 +514,12 @@
       if (v[IDS[i]] !== undefined) $(IDS[i]).value = v[IDS[i]];
     }
     update();
+    // Assigning .value does not fire an input event, and simple mode listens
+    // for one. Without this, loading a preset or a JSON design while simple
+    // mode is showing leaves the previous design's numbers on screen.
+    if (window.TLVRSimple && document.body.classList.contains("simple")) {
+      window.TLVRSimple.render();
+    }
   }
 
   $("preset").addEventListener("change", function () {
@@ -498,8 +593,9 @@
 
     L.push("");
     L.push("== L_C LOOP ==");
-    L.push("  peak voltage     " + f(o.vLc, 1) + " V   (V_IN " + p.vin + " V)");
-    L.push("  I_SAT needed     " + f(o.iSat, 1) + " A");
+    L.push("  peak voltage     " + f(o.vLc, 1) + " V   (V_IN " + p.vin + " V)   [TI Eq. 24]");
+    L.push("  I_SAT needed     " + f(o.iSat, 1) + " A   [IFX Eq. 50 — scales with t_RESP,");
+    L.push("                                       which is an unconfirmed placeholder]");
     L.push("  decay tau        " + f(o.tau * 1e6, 2) + " us");
     L.push("  loop loss        " + f(o.pLc, 2) + " W");
 
@@ -521,6 +617,8 @@
       catch (err) { alert("That file is not a valid design JSON."); }
     };
     r.readAsText(f);
+    // Clear it, or picking the same file twice fires no change event.
+    e.target.value = "";
   });
 
   /* ---- theme ---- */

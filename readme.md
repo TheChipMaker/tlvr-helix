@@ -81,6 +81,12 @@ TI's own layout figure labels the L_C pad as high voltage, 50 V or more. **The
 inter-module interconnect must be rated for the largest system the module is
 sold to support.** This is invisible from single-module analysis.
 
+Two notes from the audit. Infineon publishes the same quantity as Eq. 58–61 with
+a leading `k`, so the true figures are ~2% below the table above — immaterial to
+the conclusion. And Infineon recommends **splitting L_C into two series parts
+with their common node tied to ground**, which halves the absolute voltage
+excursion and the PCB stress. At 12 or 16 phases that is worth doing.
+
 ---
 
 ## 2. Module baseline (provisional)
@@ -118,6 +124,11 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
 
 ## 3. Open items
 
+> **A three-pass audit was run against the source PDFs.** Findings are in
+> `AUDIT-math.md` (equations) and `AUDIT-code.md` (behaviour). Two figures this
+> readme previously called validated did not reproduce and are corrected in §7.
+> Items closed by that audit are struck through below.
+
 - [ ] **Decide the target rail range.** The same L_M gives 7.8 A ripple at
       0.75 V but 17 A at 1.8 V. This decision gates the L_M choice.
 - [ ] Confirm rated current per phase from the TDA22594A thermal derating curve
@@ -128,20 +139,39 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
 - [ ] Choose a controller and confirm its minimum on-time against t_ON = 104 ns
       at the reference operating point
 - [ ] **Replace the t_RESP placeholder.** See the note below — this is currently
-      wrong by roughly a factor of ten
+      wrong by roughly a factor of ten. The equation it feeds is now IFX Eq. 50
+      rather than TI Eq. 22, and the row is marked unconfirmed in the UI, but the
+      input itself still needs a real number
 - [ ] Decide whether 4 phases is acceptable for the reference design given TI's
       guidance that TLVR suits designs above six phases
-- [ ] Obtain a clean transcription of the Renesas overshoot-based C_OUT method
-      so it can replace the TI equation and complete the source priority
+- [x] ~~Obtain a clean transcription of the Renesas overshoot-based C_OUT
+      method.~~ Done — transcribed in `AUDIT-math.md` §8. Three corrections to
+      how this item was framed: it sizes an **inductance** given C_OUT, not
+      C_OUT, so it does not replace the TI equation; its `L_c` line is the exact
+      algebraic inverse of `EQ.lTransPhase`, which the calculator already has;
+      and **Infineon Eq. 22 is the same equation**, down to the shared 0.9 safety
+      factor, so the two priority sources already agree. Wiring it in would need
+      three new inputs (`Vmax`, `T_rise`, derated C) and was left out of scope.
 - [ ] **Give the reverse solver an objective.** It currently minimises ripple
       alone, which fights the transient. It needs a stated goal — smallest
       C_OUT, fewest stages, lowest total cost — before its output is a
       recommendation rather than an observation.
-- [ ] **`non` is still unvalidated in advanced mode.** Simple mode sidesteps it
-      by forcing N_ON = N. Advanced mode will still accept a value above the
-      channel count, and the results look plausible rather than wrong. Clamp it
-      and relabel the field from "Phases" to "PWM channels".
+- [x] ~~**`non` is still unvalidated in advanced mode.**~~ Done — clamped to the
+      PWM channel count in `applyDualPhase`, which corrects the field visibly
+      when it is over while leaving a blank or mid-edit value usable. The field
+      was already relabelled to "PWM channels on in step"; the glossary entry now
+      matches. **The shipped `helix` preset was itself in the broken state**
+      (`non: 4` against `N = 2`) and is fixed. Measured effect at the reference
+      point: peak L_C voltage 93.0 V → **45.0 V**, rising I_SUM slope
+      1533 → **742 A/µs**. The L_C saturation floor no longer depends on `non`
+      at all, since IFX Eq. 50 folds partial engagement into `D_ramp`.
 - [ ] Reconcile `m_isat`: 80 A and 95 A have both been used in saved presets.
+      `calc/Presets/tlvr-design.json` carries `m_isat: 95` / `m_irated: 90`
+      against the built-in `helix` preset's 80 / 60, along with `k: 0.955` and
+      `lm: 82`. It is a later design iteration, not a corrupted copy — but note
+      its `m_irated: 90` is the datasheet **absolute maximum** output current
+      capability, which the item two above explicitly warns against using as a
+      continuous rating. Left as saved rather than silently edited.
 - [ ] Confirm no confidential documents remain in the public repository
 - [ ] **Decide whether the bandwidth equations should use L_CT.** IFX Eq. 47
       and 48 are published on bare L_C and are currently implemented that way.
@@ -151,8 +181,15 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
 - [x] ~~Decide how module mode is integrated.~~ Done — folded into a fifth
       results tab on the shared input set; `module.js` deleted. See §5.
 - [ ] **Confirm the per-phase transient inductance for M > 1 against
-      simulation.** `lTransPhase` is a Renesas form with no dual-phase
-      counterpart in any source; the M = 2 value is an extrapolation.
+      simulation.** Still open, but now **bounded and explained** rather than
+      unknown. `lTransPhase` is not an independent Renesas result: at M = 1 it is
+      *identically* `N x lTrans`, because substituting L_CT into IFX Eq. 29
+      collapses its denominator to `N x (L_C + N x L_M)`. At M > 1 the two drift
+      — 2.0495x instead of 2.0x on the Helix cell — because the M multiplier
+      enters the two forms asymmetrically. So the uncertainty is a 2.5%
+      discrepancy with an identified cause, not an unquantified extrapolation.
+      The row is now marked "extrapolated at M = 2" in the UI. See
+      `AUDIT-math.md` §4.1.
 - [ ] **Confirm the dual-phase L_CT treatment against simulation.** Neither
       Infineon nor Renesas publishes L_CT for dual-phase mode, so the
       physical-secondary-count form is a documented deviation, not a sourced
@@ -192,20 +229,55 @@ will recur: **any new consumer of the input set must be checked against
 - [ ] The `nph` chart sweeps PWM count against M-scaled magnetics, which is not
       a meaningful comparison. It should sweep **stages per PWM** instead,
       since that is now the live design question.
-- [ ] **`non` is unvalidated against `N`.** It counts PWM channels, but nothing
-      stops a value above the channel count being typed, and the results look
-      plausible rather than obviously wrong. On the Helix cell, entering 4 for
-      "all four chips firing" inflates the step-up slope and peak L_C voltage
-      with no warning. Clamp it to `N`, and label the field in channels.
+- [x] ~~**`non` is unvalidated against `N`.**~~ Clamped — see §3.
 
-All chart/panel divergence is resolved. `charts.js` threads `M` through all
-15 equation call sites; `grep -c "M: p.M" calc/charts.js` should return 15.
+**Correction: chart/panel divergence was not resolved.** This section previously
+claimed it was. Three divergences survived the Step 3 audit, all of them the same
+per-channel-vs-physical trap applied to `solve()` and not to `charts.js`, and one
+of them was the *exact* false failure §7 says was fixed:
+
+- [x] ~~The `itdc` chart reported **133 A** of required transformer saturation
+      where the panel reported **69.1 A** on the Helix cell.~~ It used the PWM
+      channel count and the un-split pair ripple instead of `EQ.stageSplit` and
+      `nPhys`. Fixed.
+- [x] ~~The `itdc` device-absolute-max limit line used PWM count~~, drawing
+      180 A where four stages at the TDA22594A's 90 A give 360 A. Fixed.
+- [x] ~~The `vin` chart reported peak L_C voltage in collapsed units~~, 46.5 V
+      against the panel's 93.0 V — a factor of exactly `M`, on the number that
+      specifies L_C insulation. Fixed.
+
+And a defect that made three charts render nothing at all:
+
+- [x] ~~`charts.js` passed no `k` into `slopeUpTlvr`/`slopeDownTlvr`~~ at five
+      call sites. `EQ.lct` then computed `(1 - undefined²) = NaN`, so **every
+      C_OUT curve in the tool was a NaN series**. `extent()` falls back to
+      `[0,1]` when all values are non-finite and the path builder skips them, so
+      the charts drew axes, gridlines, a legend and a marker with no curve, and
+      nothing logged. Fixed.
+
+Divergence is now checked rather than asserted: a harness interpolates every
+chart series at the design point and compares it against `solve()` — 63
+comparisons across the three presets, all within 0.15%.
+
+The "15 call sites" figure was already stale when written — the pre-audit file
+had **17**, and after these fixes it has **18**. A count that drifts silently is
+a poor invariant; prefer the divergence harness above.
 
 ### The t_RESP placeholder — read this before trusting transient results
 
-The preset ships with `t_RESP = 1 µs`, which is **not grounded in any source**.
-It produces an L_C saturation floor of 250 A for the reference design, while
-real compensating inductors in the Renesas material are rated near 50 A.
+The preset ships with `t_RESP = 1 µs`.
+
+**Correction from the audit: it *is* grounded in a source.** TI Figure 14
+annotates `t_resp ≈ 1 µs` for the TLVR load-step-up case, and Figure 16 annotates
+≈ 3 µs for the step-down — and those are the very figures TI Eq. 22
+cross-references. What is wrong is the *mapping*, not the provenance: the
+equation wants the interval over which loop voltage is actually applied, while
+TI's annotation is total settling time. The conclusion below is unaffected; only
+its stated justification was.
+
+At 1 µs it produces an L_C saturation floor of 219 A for the reference design
+(250 A under the old TI Eq. 22 form), while real compensating inductors in the
+Renesas material are rated near 50 A.
 
 Sanity check against Renesas' own design, where the answer is known because they
 specified a 52 A part: loop voltage is 8 x 12 - 8 x 1.8 = 81.6 V across 150 nH,
@@ -215,6 +287,10 @@ backwards from their 52 A part gives roughly **96 ns**.
 So t_RESP is of order 100–200 ns. Take the real figure from the controller
 datasheet or simulation. Everything downstream — the saturation floor and both
 capacitance criteria — scales directly with it.
+
+Until it is replaced, the L_C saturation row carries a **"t_RESP unconfirmed"**
+marker in the UI so the number is never read as authoritative. Simple mode omits
+the row entirely.
 
 ---
 
@@ -234,6 +310,8 @@ calc/                     the calculator
   Presets/                saved designs and exported reports
 Suggested components.txt
 readme.md
+AUDIT-math.md             equation-by-equation audit against the source PDFs
+AUDIT-code.md             behaviour audit: NaN paths, guards, state, divergence
 ```
 
 ### Confidentiality — action required
@@ -323,6 +401,16 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
   with the tab bar pinned, so the chart stays visible while inputs are adjusted.
 - **Export report** writes `tlvr-report.txt`: every input as typed plus the full
   computed set, in flat readable text for pasting into a review conversation.
+- **Inputs are range-checked.** A zero, negative or inverted input replaces the
+  results panels with the specific reason rather than computing on it. Before
+  the audit, `V_OUT > V_IN` produced a magnetizing ripple of −1466 A and
+  `t_step = 0` produced "0 H" beside a red fail chip — both reading as a failed
+  *design* rather than a bad *input*. Both modes share one `validate()`.
+- **Results that rest on an unconfirmed input or an unsourced scaling carry an
+  amber marker**, distinct from the green/red pass-fail chips: the L_C
+  saturation floor ("t_RESP unconfirmed"), per-phase transient L at M > 1
+  ("extrapolated at M = 2"), and the IMON summing resistor at M > 1 ("scaling
+  not vendor-specified"). Green still only ever means pass.
 
 ### Simple mode
 
@@ -342,6 +430,15 @@ Two explicit directions, never on screen together:
 - **Size them for me** — reverse. Works back from the per-stage ripple budget to
   minimum L_M and L_C. Those two input fields are disabled while it is active,
   because they are outputs in this direction.
+
+Its inversions were checked in the audit and are **algebraically sound** — the
+sized `L_M`/`L_C` reproduce the target ripple split to full precision when fed
+back through the forward path, and the `L_CT` back-out is the exact inverse of
+`EQ.lct`. One case was missing: where series winding leakage alone exceeds the
+loop inductance the ripple target needs, the back-out went negative and the
+panel offered a **negative inductance as a part to buy** (−44 nH at 12 phases,
+−144 nH at 20). It now reports 0 nH and explains that no discrete L_C is needed
+for ripple — the outcome §7 already predicted.
 
 The reverse solver has **no objective function.** It returns the smallest
 inductances that keep per-stage peak under the rated current, and nothing more.
@@ -442,23 +539,29 @@ failure against an 80 A part.
 | Result                                          | Source                                     |
 | ----------------------------------------------- | ------------------------------------------ |
 | Duty, overlap counts, D_HF, t_overlap           | IFX Eq. 7–10                               |
+| Magnetizing ripple alone                        | IFX Eq. 4 (Eq. 13 is the combined form)    |
 | L_C / phase / output ripple                     | IFX Eq. 11–17                              |
 | Transformer saturation requirement              | IFX Eq. 18                                 |
 | Output ripple with ESR and ESL                  | IFX Eq. 19                                 |
 | Effective transient inductance, whole regulator | IFX Eq. 29, on L_CT                        |
-| Effective transient inductance, per phase       | Renesas                                    |
+| Effective transient inductance, per phase       | Renesas — but see §7, it is N × Eq. 29     |
 | Maximum L_C for slew                            | IFX Eq. 31                                 |
-| C_OUT for controller delay                      | IFX Eq. 32                                 |
+| C_OUT for controller delay                      | IFX Eq. 32, on the TI Eq. 4 budget         |
 | Slew and bandwidth gain vs buck                 | IFX Eq. 46, 47, 48 — verified, on bare L_C |
-| L_C transient excursions                        | IFX Eq. 50, 56                             |
-| Loop time constant                              | IFX Eq. 57                                 |
+| **L_C saturation floor**                        | **IFX Eq. 50** — supersedes TI Eq. 22      |
+| L_C transient excursion on release              | IFX Eq. 56 — implemented, not displayed    |
+| Loop time constant                              | IFX Eq. 57 (= TI Eq. 23)                   |
 | Effective loop inductance L_CT                  | Renesas                                    |
-| I_SUM slopes                                    | TI Eq. 18, 20 — TI-only                    |
-| C_OUT required                                  | TI Eq. 1 — TI-only                         |
-| L_C saturation floor                            | TI Eq. 22 — TI-only                        |
-| Peak L_C voltage                                | TI Eq. 24 — TI-only                        |
+| I_SUM slopes                                    | TI Eq. 16, 18, 19, 20 — TI-only            |
+| C_OUT required                                  | TI Eq. 4 (step up), Eq. 5 (release)        |
+| Peak L_C voltage, transient                     | TI Eq. 24 — cf. IFX Eq. 58–61 steady state |
 | L_C loop power loss                             | TI Eq. 26 — TI-only                        |
 | Low-side FET RMS                                | TI Eq. 27 — TI-only                        |
+
+Every row above was re-derived from the rendered PDF pages during the audit; see
+`AUDIT-math.md` for the form, units and per-stage/per-channel/whole-regulator
+classification of each. Note that `pdftotext` silently drops fraction numerators
+in all three documents, so text extraction is not a safe way to check these.
 
 ---
 
@@ -474,14 +577,31 @@ L_CT = (1 - k^2) x L_M x N + L_C
 Validated against the Renesas worked example (8-phase, 12 V to 1.8 V,
 L_M = 200 nH, L_C = 150 nH, k = 0.98, 600 kHz):
 
-| Quantity             | Renesas | This calculator | Their simulation |
-| -------------------- | ------- | --------------- | ---------------- |
-| L_CT                 | 213 nH  | 213 nH          | —                |
-| L_C ripple           | 1.88 A  | 1.84 A          | 1.9 A            |
-| Summed output ripple | 15.8 A  | 16.4 A          | 16.7 A           |
+| Quantity             | Renesas equation | This calculator | Their simulation |
+| -------------------- | ---------------- | --------------- | ---------------- |
+| L_CT                 | 213 nH           | 213.4 nH        | —                |
+| L_C ripple           | 1.88 A           | 1.84 A          | 1.9 A            |
+| Per-phase ripple     | 14.63 A          | 14.55 A         | 14.5 A           |
+| Summed output ripple | **16.70 A**      | 16.4 A          | 16.7 A           |
+| L_T per phase        | 24.3 nH          | 24.38 nH        | —                |
 
-Before the correction the same code returned 2.61 A and 22.5 A, roughly 40%
-high. **Any change to the ripple path must be re-checked against this example.**
+**Corrected: the summed-output-ripple row previously read "Renesas 15.8 A" and
+that was the wrong example.** 15.8 A comes from Renesas' *design-procedure*
+worked example — a 120 nH transformer at 450 A and 1.83 V — not the *equations*
+example this preset is configured to. For the 200 nH case, Renesas' own
+`I_Total` equation gives 16.70 A, matching their simulation exactly. So the
+calculator is **1.8% low against the right reference**, not 3.8% high against a
+figure from a different design.
+
+The remaining gaps on the L_C and output-ripple rows are **not errors**: they are
+precisely the extra factor of `k` that Infineon Eq. 11 carries and Renesas omits
+(`1.88 × 0.98 = 1.84`). Following Infineon here is the correct source priority,
+and it lands closer to Renesas' own simulation on phase ripple than Renesas'
+equation does.
+
+Before the leakage correction the same code returned 2.61 A and 22.5 A, roughly
+40% high. **Any change to the ripple path must be re-checked against this
+example.**
 
 A useful consequence for the module product: at high phase count this leakage
 term alone can exceed the minimum loop inductance needed to hold ripple inside
@@ -502,14 +622,42 @@ uncorrected code returned 17.8 nH for the equivalent quantity, 37% optimistic.
 
 `lTrans`, `slopeUpTlvr` and `slopeDownTlvr` now take a `leakage` flag defaulting
 to true and compute L_CT internally. `lTransPhase` was added for the Renesas
-per-phase form. **The regulator-wide and per-phase figures differ by roughly 4x
-at the reference operating point** — they are displayed as separate rows and
-must not be conflated.
+per-phase form. The regulator-wide and per-phase figures are displayed as
+separate rows and must not be conflated.
 
-Still on bare L_C, deliberately: `lcMaxFromSlew` (IFX Eq. 31), `iSatLcNeeded`
-(TI Eq. 22), `iLcTransOn` / `iLcTransOff` (IFX Eq. 50, 56), and the bandwidth
-pair (IFX Eq. 47, 48). These are published that way and there is no vendor
-counterpart to defer to. Revisit as a group, not piecemeal.
+**Corrected: they differ by exactly `N`, not "roughly 4x".** And they are not two
+independent sources. Substituting `L_CT = (1-k²)·L_M·N + L_C` into IFX Eq. 29
+collapses its denominator to `N·(L_C + N·L_M)`, so at M = 1 the Renesas per-phase
+form is *identically* `N × ` IFX Eq. 29 — the same physics in two normalisations.
+Verified: the ratio is `4.0000000000` on the TI preset and `8.0000000000` on the
+Renesas one. At the shipped Helix design point `N = 2`, so the factor is 2.
+
+At M > 1 the two drift (2.0495x on Helix) because `EQ.lct`'s `M` multiplier
+enters the two forms asymmetrically. See `AUDIT-math.md` §4.1.
+
+Still on bare L_C, deliberately: `lcMaxFromSlew` (IFX Eq. 31), `iLcTransOn` /
+`iLcTransOff` (IFX Eq. 50, 56), and the bandwidth pair (IFX Eq. 47, 48). These
+are published that way and there is no vendor counterpart to defer to. Revisit as
+a group, not piecemeal.
+
+### The L_C saturation floor now uses Infineon, not TI
+
+`iSatLcNeeded` (TI Eq. 22) has been **superseded by `iLcTransOn` (IFX Eq. 50)**,
+which is the same quantity at higher source priority:
+
+```
+TI  Eq. 22:  I_SAT(Lc) >> t_RESP · (N_ON·V_IN − N·V_OUT) / L_c
+IFX Eq. 50:  ΔI_Lc     =  k · t · (D_trans·N·V_IN − N·V_OUT) / L_c
+```
+
+TI Eq. 22 is the `D_trans = 1` limit of Eq. 50 with the coupling factor dropped.
+Infineon folds partial phase engagement into `D_trans` rather than a separate
+`N_ON` count, so **the swap also removes this row's dependence on `non`**.
+Reference point: 250 A → 219 A. `iSatLcNeeded` is retained in `equations.js`,
+marked superseded, for comparison.
+
+This corrects the *sourcing* only. `t_RESP` remains unconfirmed and the row is
+marked as such in the UI.
 
 ### Validation additions
 
@@ -523,9 +671,22 @@ path rather than the equations in isolation.
 
 | Preset | M | N | L_CT | dI_Lc | dI_out | L_trans/ph | I_sat needed |
 |---|---|---|---|---|---|---|---|
-| Renesas | 1 | 8 | 213.4 nH | 1.84 A | 16.4 A | 24.38 nH | 67.3 A |
+| Renesas | 1 | 8 | 213.4 nH | 1.84 A | 16.4 A | 24.38 nH | **57.3 A** |
 | Helix | 2 | 2 | 101.9 nH | 10.52 A | 35.2 A | 31.84 nH | 69.1 A |
 | TI Table 2 | 1 | 4 | 203.8 nH | 4.70 A | 25.0 A | 39.18 nH | 87.7 A |
+
+**Corrected: the Renesas I_sat cell previously read 67.3 A and does not
+reproduce.** The shipped path returns 57.3 A:
+
+```
+I_sat = I_TDC/nPhys + dI_ph_stage/2 = 400/8 + 14.55/2 = 50 + 7.28 = 57.3 A
+```
+
+67.3 A requires `I_TDC = 480 A`, but the `ren` preset ships `itdc: 400`. Renesas'
+own slide computes `450/8 + 22.9/2 = 67.7 A` for their *design-procedure*
+example — the same 120 nH case that produced the wrong 15.8 A above, so both
+errors have one root: two Renesas worked examples being read as one. Every other
+cell in this table reproduces exactly.
 
 The Renesas row is the validation anchor and reproduces §7 exactly. **Any
 future edit to the dual-phase path must reproduce this whole table**, since
@@ -539,7 +700,9 @@ Two things about this table that are not defects:
   a reference operating point, not a Helix configuration.
 - **`L_trans/ph` for the Helix row is the least trustworthy number here.** The
   Renesas per-phase form was never published for dual-phase mode, so the M > 1
-  value is an extrapolation. Confirm against simulation before relying on it.
+  value is an extrapolation — now known to be a 2.5% drift from `N × ` IFX
+  Eq. 29 with an identified cause (§7 above). Marked "extrapolated at M = 2" in
+  the UI. Confirm against simulation before relying on it.
 
 ### Other correctness fixes from the same review
 
@@ -675,6 +838,15 @@ alarm or blame. This governs tooltip and detail-panel text.
   already-scaled values and must not divide by M themselves. If a new consumer
   of the input set appears, route it through `window.TLVR.readInputs`, not the
   private `readInputs`.
+- **Fix a quantity in every consumer, not just `solve()`.** Three of the four
+  defects found in the code audit were a correction applied to `solve()` and not
+  to `charts.js`, one of them re-creating a false failure this readme already
+  recorded as fixed. Any quantity that appears in both the results panel and a
+  chart has **two** call sites, and the export report may be a third.
+- **Pass every argument an equation destructures, including the ones that look
+  optional.** `EQ.lct` reads `k`; omitting it yields `(1 - undefined²) = NaN`,
+  which propagates silently and renders as a chart with no curve. Missing
+  arguments in JavaScript are not an error, so nothing warns.
 - **A view that hides unreliable numbers is more useful than one that shows
   everything.** Simple mode's value is what it omits. If a new result cannot be
   traced to a validated equation, it belongs in advanced mode or nowhere.
@@ -686,4 +858,12 @@ alarm or blame. This governs tooltip and detail-panel text.
   Eq. 24 fix are instances of the same question.
 - Layout belongs to shared selectors. Prefer adding a mode to an existing rule
   over writing a rule for that mode.
+- **Verify against the source PDF page, not extracted text.** `pdftotext` drops
+  fraction numerators and denominators in all three vendor documents, silently
+  turning `A/B` into `A B`. Every equation check in `AUDIT-math.md` was made
+  against the rendered page for this reason.
+- **Check a claim before repeating it.** Two figures in this file were labelled
+  validated and did not reproduce, both from conflating Renesas' two separate
+  worked examples; and the "all divergence resolved" claim was false when
+  written. If a number matters, re-derive it.
 - Results are estimates. Confirm against simulation before committing a design.

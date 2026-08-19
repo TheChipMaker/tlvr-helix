@@ -47,7 +47,7 @@
     });
     var cUp = EQ.coutRequired({ iStep: p.iStep, slope: slUp, dVac: p.dVac, rLL: p.rLL });
     var cDn = EQ.coutRequired({ iStep: p.iStep, slope: slDn, dVac: p.dVac, rLL: p.rLL });
-    var cDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: p.dVac });
+    var cDly = EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: p.dVac, rLL: p.rLL });
     var cNeed = Math.max(cUp, cDn, cDly);
     var gov = (cNeed === cDly) ? "controller delay"
       : (cNeed === cDn) ? "load release" : "load step-up";
@@ -93,14 +93,24 @@
       var nMax = EQ.nSimOnMax(p.N, D);
       var dhf = EQ.dHF(p.N, D), fhf = EQ.fHF(p.N, p.fsw);
       var lctReq = (p.k * (nMax * p.vin - p.N * p.vout) * dhf) / (lcStage * fhf);
-      out.LcReq = lctReq - (1 - p.k * p.k) * out.LmReq * p.M * p.N;    // model
-      out.LcTyped = out.LcReq * p.M;
+      var leak = (1 - p.k * p.k) * out.LmReq * p.M * p.N;
       out.lctReq = lctReq;
+      out.leak = leak;
+      out.LcReq = lctReq - leak;                                       // model
+
+      // The series leakage of all physical secondaries can on its own exceed
+      // the loop inductance the ripple target needs — readme section 7 flags
+      // this as a real high-phase-count outcome. The back-out then goes
+      // negative. Report zero and say why, rather than printing a negative
+      // inductance as a part to buy.
+      out.lcFromLeakage = !(out.LcReq > 0);
+      if (out.lcFromLeakage) out.LcReq = 0;
+      out.LcTyped = out.LcReq * p.M;
     }
 
     // C_OUT at the recommended magnetics, if they exist; else at the current ones.
     var uLm = (out.LmReq > 0) ? out.LmReq : p.Lm;
-    var uLc = (out.LcReq > 0) ? out.LcReq : p.Lc;
+    var uLc = (out.LcReq >= 0 && isFinite(out.LcReq)) ? out.LcReq : p.Lc;
     var sUp = EQ.slopeUpTlvr({
       nOn: p.N, N: p.N, vin: p.vin, vout: p.vout, Lm: uLm, Lc: uLc, k: p.k, M: p.M
     });
@@ -110,7 +120,7 @@
     out.CoutReq = Math.max(
       EQ.coutRequired({ iStep: p.iStep, slope: sUp, dVac: p.dVac, rLL: p.rLL }),
       EQ.coutRequired({ iStep: p.iStep, slope: sDn, dVac: p.dVac, rLL: p.rLL }),
-      EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVout: p.dVac })
+      EQ.coutMinDelay({ tDelay: p.tDelay, iStep: p.iStep, dVac: p.dVac, rLL: p.rLL })
     );
 
     // Cheapest lever when C_OUT is short: the load line that closes the gap.
@@ -135,6 +145,22 @@
 
   function render() {
     var p = window.TLVR.readInputs();
+
+    // Same gate advanced mode uses. Without it a zero or inverted input
+    // produces NaN, num() renders it as an em dash, and every pass/fail chip
+    // reads as a failure — a broken input looks like a failed design.
+    var errs = window.TLVR.validate ? window.TLVR.validate(p) : [];
+    if (errs.length) {
+      var m = '<div class="rows-error"><strong>Cannot compute this design.' +
+        "</strong><ul>";
+      for (var i = 0; i < errs.length; i++) m += "<li>" + errs[i] + "</li>";
+      $("s-check").innerHTML = m + "</ul></div>";
+      $("s-check").hidden = false;
+      $("s-buy").hidden = true;
+      $("s-buy").innerHTML = "";
+      return;
+    }
+
     var f = forward(p);
     var r = reverse(p, f);
     var h;
@@ -181,7 +207,12 @@
       h += row("L_M, minimum", num(r.LmTyped * 1e9, 0), "nH", "info",
         MAG_SHARE * 100 + "% of budget \u2014 enter as typed");
       h += row("L_C, minimum", num(r.LcTyped * 1e9, 0), "nH", "info",
-        (100 - MAG_SHARE * 100) + "% of budget \u2014 enter as typed");
+        r.lcFromLeakage
+          ? "winding leakage alone (" + num(r.leak * 1e9, 0) +
+            " nH) already exceeds the " + num(r.lctReq * 1e9, 0) +
+            " nH loop inductance the ripple target needs \u2014 no discrete " +
+            "L_C is required for ripple, so size it for the transient instead"
+          : (100 - MAG_SHARE * 100) + "% of budget \u2014 enter as typed");
     }
     h += row("C_OUT required", num(r.CoutReq * 1e6, 0), "\u00B5F",
       r.CoutReq > p.Cout ? "fail" : "pass",
@@ -205,14 +236,23 @@
   }
 
   /* ---- mode toggle ----------------------------------------------------- */
+  // L_M and L_C are outputs in reverse mode, so their inputs are disabled — but
+  // ONLY while simple mode is on screen. Applying it unconditionally left the
+  // two fields disabled and greyed in advanced mode whenever the last simple
+  // session ended in reverse.
+  function applyDirState() {
+    var on = document.body.classList.contains("simple") && DIR === "rev";
+    document.body.classList.toggle("rev", on);
+    var lm = $("lm"), lc = $("lc");
+    if (lm) lm.disabled = on;
+    if (lc) lc.disabled = on;
+  }
+
   function setDir(d) {
     DIR = d;
-    document.body.classList.toggle("rev", d === "rev");
     $("dir-fwd").classList.toggle("on", d === "fwd");
     $("dir-rev").classList.toggle("on", d === "rev");
-    var lm = $("lm"), lc = $("lc");
-    if (lm) lm.disabled = (d === "rev");
-    if (lc) lc.disabled = (d === "rev");
+    applyDirState();
     try { localStorage.setItem("tlvr-dir", d); } catch (e) { }
     render();
   }
@@ -220,6 +260,7 @@
   function setMode(on) {
     document.body.classList.toggle("simple", on);
     $("mode").textContent = on ? "Advanced" : "Simple";
+    applyDirState();
     try { localStorage.setItem("tlvr-mode", on ? "simple" : "adv"); } catch (e) { }
     if (on) render();
   }

@@ -338,6 +338,24 @@ legend {
   border-top: 1px solid var(--border);
 }
 
+/* Shown in place of results when an input makes the design unsolvable, so a
+   bad input never renders as a dash or a plausible-looking number. */
+.rows-error {
+  color: var(--fault);
+  font-size: .92rem;
+  line-height: 1.55;
+  padding: 8px 2px;
+}
+
+.rows-error ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.rows-error li {
+  margin: 3px 0;
+}
+
 .row:first-child {
   border-top: none
 }
@@ -388,6 +406,18 @@ legend {
   background: rgba(239, 68, 68, .10);
   color: var(--fault);
   border: 1px solid rgba(239, 68, 68, .30);
+}
+
+/* Caution, not a verdict: the equation is sourced but one of its inputs or its
+   scaling is not confirmed, so the number is not authoritative. Never green. */
+.chip.na {
+  background: rgba(245, 197, 66, .12);
+  color: var(--warn-text, #8A6D1F);
+  border: 1px solid rgba(245, 197, 66, .38);
+}
+
+html[data-theme="dark"] .chip.na {
+  color: var(--warn);
 }
 
 .val.ok {
