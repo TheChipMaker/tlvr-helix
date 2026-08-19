@@ -133,6 +133,15 @@ L_M = 150 nH and L_C = 180 nH come from TI's Table 2 simulation, which is
       guidance that TLVR suits designs above six phases
 - [ ] Obtain a clean transcription of the Renesas overshoot-based C_OUT method
       so it can replace the TI equation and complete the source priority
+- [ ] **Give the reverse solver an objective.** It currently minimises ripple
+      alone, which fights the transient. It needs a stated goal — smallest
+      C_OUT, fewest stages, lowest total cost — before its output is a
+      recommendation rather than an observation.
+- [ ] **`non` is still unvalidated in advanced mode.** Simple mode sidesteps it
+      by forcing N_ON = N. Advanced mode will still accept a value above the
+      channel count, and the results look plausible rather than wrong. Clamp it
+      and relabel the field from "Phases" to "PWM channels".
+- [ ] Reconcile `m_isat`: 80 A and 95 A have both been used in saved presets.
 - [ ] Confirm no confidential documents remain in the public repository
 - [ ] **Decide whether the bandwidth equations should use L_CT.** IFX Eq. 47
       and 48 are published on bare L_C and are currently implemented that way.
@@ -215,6 +224,14 @@ capacitance criteria — scales directly with it.
 DXFs/TDA_Pads/            footprint pad geometry
 Libraries/TDA22594A/      schematic symbol / footprint library
 calc/                     the calculator
+  index.html              markup, both modes
+  style.css               tokens, layout, both modes
+  equations.js            EQ.* — pure functions, no DOM
+  terms.js                glossary: t / d / long / src
+  charts.js               chart registry + SVG renderer
+  calc.js                 advanced mode wiring, readInputs, solve, export
+  simple.js               simple mode: forward check + reverse sizing
+  Presets/                saved designs and exported reports
 Suggested components.txt
 readme.md
 ```
@@ -304,6 +321,35 @@ Location: `calc/`. Open `calc/index.html` directly in a browser. It runs from
   `TLVRDetail.renderInto(term, container)`.
 - Inputs sit in a sticky left column; the results column scrolls independently
   with the tab bar pinned, so the chart stays visible while inputs are adjusted.
+- **Export report** writes `tlvr-report.txt`: every input as typed plus the full
+  computed set, in flat readable text for pasting into a review conversation.
+
+### Simple mode
+
+A second view over the *same* input elements, toggled from the masthead, so the
+two modes can never disagree and Save/Open/Export keep working unchanged.
+
+Its design rule is **reliability by omission**: it shows only quantities that
+trace to a validated equation. Deliberately absent are the `t_RESP`-driven loop
+I_SAT, per-phase `L_trans` at M > 1, and the slew-derived L_C ceiling — all three
+flagged untrustworthy elsewhere in this document. `N_ON` is not an input here;
+it is forced to N, the worst case and the only value that cannot be mis-entered.
+
+Two explicit directions, never on screen together:
+
+- **Check my parts** — forward. Duty, per-stage peak vs rated, I_SAT vs device,
+  output ripple, C_OUT required vs planned, L_C voltage rating.
+- **Size them for me** — reverse. Works back from the per-stage ripple budget to
+  minimum L_M and L_C. Those two input fields are disabled while it is active,
+  because they are outputs in this direction.
+
+The reverse solver has **no objective function.** It returns the smallest
+inductances that keep per-stage peak under the rated current, and nothing more.
+Because larger inductance cuts ripple but flattens the transient slope, its
+recommendations generally *raise* required C_OUT — the panel now shows that cost
+explicitly. Treat the L_M/L_C pair as one self-consistent starting point to feed
+back into the forward check, not as a solved design. The 70/30 budget split
+between them is a convention, not physics.
 
 ### Module mode — resolved, and what replaced it
 
@@ -629,6 +675,9 @@ alarm or blame. This governs tooltip and detail-panel text.
   already-scaled values and must not divide by M themselves. If a new consumer
   of the input set appears, route it through `window.TLVR.readInputs`, not the
   private `readInputs`.
+- **A view that hides unreliable numbers is more useful than one that shows
+  everything.** Simple mode's value is what it omits. If a new result cannot be
+  traced to a validated equation, it belongs in advanced mode or nowhere.
 - **Decide whether each quantity is per-channel or physical before wiring it.**
   Collapsed `N` and scaled `L_M`/`L_C` are correct for anything the M-scaling
   cancels through — slopes, ripple, capacitance. Anything describing a physical
