@@ -834,3 +834,12 @@ body.simple .inputs label[data-term="esl"] { display: none; }
 .srow.s-lever .sv { color: var(--signal); }
 .sbad { color: var(--fault); font-size: .9rem; line-height: 1.5; }
 .snote { font-size: .78rem; opacity: .6; line-height: 1.5; margin-top: 1.5rem; }
+.dirsw { display: flex; gap: 6px; margin-bottom: 18px; }
+.dirsw button { flex: 1; padding: 9px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: transparent; color: var(--text-2);
+  font-family: var(--font-body); font-size: .88rem; cursor: pointer; }
+.dirsw button.on { border-color: var(--signal); color: var(--signal); font-weight: 600; }
+body.rev .inputs label[data-term="lm"],
+body.rev .inputs label[data-term="lc"] { opacity: .4; }
+body.rev .inputs label[data-term="lm"] input,
+body.rev .inputs label[data-term="lc"] input { cursor: not-allowed; }

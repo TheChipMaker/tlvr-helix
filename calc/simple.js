@@ -16,6 +16,7 @@
   "use strict";
 
   var MAG_SHARE = 0.7;   // fraction of the per-stage ripple budget given to L_M
+  var DIR = "fwd";       // "fwd" = check what is typed, "rev" = size the magnetics
 
   function $(id) { return document.getElementById(id); }
   function num(v, d) {
@@ -154,9 +155,18 @@
     h += row("L_C voltage rating", num(f.vLc), "V", "info",
       "spec the part and the loop routing for this");
     $("s-check").innerHTML = h;
+    $("s-check").hidden = (DIR !== "fwd");
+    $("s-buy").hidden = (DIR !== "rev");
+    if (DIR !== "rev") { $("s-buy").innerHTML = ""; return; }
 
     /* --- right: what should I buy? --- */
-    h = "<h3>What to buy</h3>";
+    h = "<h3>Sized for you</h3>";
+    h += '<p class="snote">L_M and L_C are <em>outputs</em> here, so those two ' +
+      'fields are disabled. These are the smallest values that keep per-stage ' +
+      'peak under the rated current \u2014 nothing more. The ' +
+      (MAG_SHARE * 100) + "/" + (100 - MAG_SHARE * 100) +
+      " split between them is a convention, not physics; you can trade one " +
+      "against the other.</p>";
     if (!(r.bud > 0)) {
       h += '<p class="sbad">No ripple budget left. The DC pedestal alone is ' +
         num(r.iDC) + " A against a " + num(p.mIrated, 0) +
@@ -173,8 +183,13 @@
       h += row("L_C, minimum", num(r.LcTyped * 1e9, 0), "nH", "info",
         (100 - MAG_SHARE * 100) + "% of budget \u2014 enter as typed");
     }
-    h += row("C_OUT required", num(r.CoutReq * 1e6, 0), "\u00B5F", "info",
-      "at the recommended magnetics");
+    h += row("C_OUT required", num(r.CoutReq * 1e6, 0), "\u00B5F",
+      r.CoutReq > p.Cout ? "fail" : "pass",
+      "at the sized magnetics \u2014 planned " + num(p.Cout * 1e6, 0) + " \u00B5F");
+    if (r.CoutReq > f.cNeed) {
+      h += row("Cost of sizing up", "+" + num((r.CoutReq - f.cNeed) * 1e6, 0), "\u00B5F",
+        "info", "larger inductors cut ripple but slow the transient, so C_OUT rises");
+    }
 
     if (f.cNeed > p.Cout) {
       if (r.rLLmin > 0 && r.rLLmin < 5e-3) {
@@ -190,6 +205,18 @@
   }
 
   /* ---- mode toggle ----------------------------------------------------- */
+  function setDir(d) {
+    DIR = d;
+    document.body.classList.toggle("rev", d === "rev");
+    $("dir-fwd").classList.toggle("on", d === "fwd");
+    $("dir-rev").classList.toggle("on", d === "rev");
+    var lm = $("lm"), lc = $("lc");
+    if (lm) lm.disabled = (d === "rev");
+    if (lc) lc.disabled = (d === "rev");
+    try { localStorage.setItem("tlvr-dir", d); } catch (e) { }
+    render();
+  }
+
   function setMode(on) {
     document.body.classList.toggle("simple", on);
     $("mode").textContent = on ? "Advanced" : "Simple";
@@ -207,9 +234,16 @@
     document.addEventListener("input", function () {
       if (document.body.classList.contains("simple")) render();
     });
-    var saved = null;
-    try { saved = localStorage.getItem("tlvr-mode"); } catch (e) { }
+    $("dir-fwd").addEventListener("click", function () { setDir("fwd"); });
+    $("dir-rev").addEventListener("click", function () { setDir("rev"); });
+    var saved = null, sd = null;
+    try {
+      saved = localStorage.getItem("tlvr-mode");
+      sd = localStorage.getItem("tlvr-dir");
+    } catch (e) { }
+    DIR = (sd === "rev") ? "rev" : "fwd";
     if (saved === "simple") setMode(true);
+    setDir(DIR);
   });
 
   window.TLVRSimple = { render: render, forward: forward, reverse: reverse };

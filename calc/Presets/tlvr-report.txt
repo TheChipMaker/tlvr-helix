@@ -1,13 +1,13 @@
 TLVR design report
-Generated 2026-08-19T09:08:00.943Z
+Generated 2026-08-19T11:47:42.649Z
 
 == INPUTS (as typed) ==
   vin = 12
-  vout = 0.7
+  vout = 0.75
   fsw = 600
   nph = 2
   itdc = 240
-  k = 0.96
+  k = 0.955
   lm = 82
   lc = 180
   rlc = 0.4
@@ -17,20 +17,20 @@ Generated 2026-08-19T09:08:00.943Z
   istep = 200
   tstep = 500
   dvac = 30
-  rll = 0.1
+  rll = 0.085
   tresp = 1
   non = 2
   dramp = 0.9
   tdelay = 200
-  cout = 6000
+  cout = 7000
   esr = 0.2
   esl = 50
   m_stages = 4
   m_pwm = 2
   m_count = 1
   m_isat = 95
-  m_irated = 60
-  m_rpri = 0.19
+  m_irated = 90
+  m_rpri = 0.2
 
 == TOPOLOGY ==
   physical stages  4
@@ -38,36 +38,36 @@ Generated 2026-08-19T09:08:00.943Z
   M (stages/PWM)   2
   L_M as typed     82.0 nH  -> model 41.0 nH
   L_C as typed     180.0 nH  -> model 90.0 nH
-  duty cycle D     0.0583
-  L_CT loop        102.9 nH
-  L_trans, whole   11.8 nH
-  L_trans, /phase  24.52 nH
+  duty cycle D     0.0625
+  L_CT loop        104.4 nH
+  L_trans, whole   11.9 nH
+  L_trans, /phase  24.89 nH
 
 == STEADY-STATE RIPPLE ==
-  magnetizing      26.80 A
-  loop I_LC        9.62 A   (RMS 2.78 A)
-  per-phase        36.03 A
-  summed output    43.60 A
-  V_OUT ripple     14.71 mV
+  magnetizing      28.58 A
+  loop I_LC        10.00 A   (RMS 2.89 A)
+  per-phase        38.13 A
+  summed output    45.78 A
+  V_OUT ripple     15.33 mV
 
 == PER-STAGE CURRENTS ==
   DC pedestal      60.0 A
-  ripple           22.63 A
-  peak             71.3 A   (rated 60 A)
+  ripple           23.84 A
+  peak             71.9 A   (rated 90 A)
   RMS              60.4 A
-  I_SAT needed     71.3 A   (device 95 A)
+  I_SAT needed     71.9 A   (device 95 A)
 
 == TRANSIENT ==
-  slope up         990.66 A/us   (buck 551.22)
-  slope down       61.37 A/us   (buck 34.15)
-  C_OUT step up    404 uF
-  C_OUT release    6518 uF
+  slope up         979.70 A/us   (buck 548.78)
+  slope down       65.31 A/us   (buck 36.59)
+  C_OUT step up    434 uF
+  C_OUT release    6515 uF
   C_OUT delay      1333 uF
-  C_OUT GOVERNING  6518 uF   (planned 6000 uF)   *** SHORT ***
+  C_OUT GOVERNING  6515 uF   (planned 7000 uF)   ok
   L_C max (slew)   Infinity nH
 
 == L_C LOOP ==
-  peak voltage     45.2 V   (V_IN 12 V)
-  I_SAT needed     251.1 A
+  peak voltage     45.0 V   (V_IN 12 V)
+  I_SAT needed     250.0 A
   decay tau        60.00 us
   loop loss        0.21 W
